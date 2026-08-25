@@ -37,6 +37,7 @@
       refine: {},
       equip: DATA.emptyEquip(),
       potions: Object.assign(DATA.emptyPotions(), DATA.START_POTIONS || {}),
+      potionBuffs: {},
       hp: null,
       mp: null,
       bossIndex: 0,
@@ -63,6 +64,13 @@
     if (save.jobExp == null) save.jobExp = 0;
     if (save.unspentStatPoints == null) save.unspentStatPoints = 0;
     if (!save.potions) save.potions = Object.assign(DATA.emptyPotions(), DATA.START_POTIONS || {});
+    else {
+      const empty = DATA.emptyPotions();
+      Object.keys(empty).forEach(function (k) {
+        if (save.potions[k] == null) save.potions[k] = empty[k];
+      });
+    }
+    if (!save.potionBuffs) save.potionBuffs = {};
     if (!save.refine) save.refine = {};
     if (!save.mapId) save.mapId = "city";
     if (save.autoFarm == null) save.autoFarm = false;
@@ -80,7 +88,9 @@
 
   PVE.derived = function (save) {
     PVE.ensureProgress(save);
-    return STATS.computeHeroStats(save.heroId, save.allocated, save.equip, save.level, save.refine);
+    const d = STATS.computeHeroStats(save.heroId, save.allocated, save.equip, save.level, save.refine);
+    d.potionAspdMod = DATA.activePotionAspdMod(save.potionBuffs);
+    return d;
   };
 
   PVE.syncVitals = function (save) {
@@ -98,6 +108,8 @@
     d.skillRanks = Object.assign({}, ranks);
     d.skills = DATA.learnedSkills(save.heroId, ranks);
     const unit = COMBAT.createUnit(d, "left");
+    if (d.potionAspdMod > 0) unit.potionAspdMod = d.potionAspdMod;
+    if (PVE.potionBuffRemainMs(save, "berserk") > 0) unit.berserk = true;
     unit.hp = save.hp;
     unit.mp = save.mp;
     COMBAT.resetTemps(unit);
@@ -396,12 +408,40 @@
       save.hp = Math.min(d.maxHp, (save.hp || 0) + (item.healHp || 0));
       save.mp = Math.min(d.maxMp, (save.mp || 0) + (item.healMp || 0));
     }
+    var dur = null;
+    var buff = null;
+    if (item.aspdMod) {
+      save.potionBuffs = save.potionBuffs || {};
+      dur = item.durationMs != null ? item.durationMs : DATA.BERSERK_DURATION_MS;
+      save.potionBuffs[item.id] = { until: Date.now() + dur, aspdMod: item.aspdMod };
+      if (unit) {
+        unit.potionAspdMod = Math.max(Number(unit.potionAspdMod) || 0, item.aspdMod);
+        if (item.id === "berserk") unit.berserk = true;
+      }
+      buff = { id: item.id, aspdMod: item.aspdMod, until: save.potionBuffs[item.id].until, durationMs: dur };
+    }
     return {
       ok: true,
       id: potionId,
       healedHp: (unit ? unit.hp : save.hp) - hp0,
       healedMp: (unit ? unit.mp : save.mp) - mp0,
+      buff: buff,
     };
+  };
+
+  PVE.potionBuffRemainMs = function (save, id, now) {
+    now = now != null ? now : Date.now();
+    var b = save && save.potionBuffs && save.potionBuffs[id];
+    if (!b || !b.until) return 0;
+    return Math.max(0, b.until - now);
+  };
+
+  PVE.fmtRemain = function (ms) {
+    ms = Math.max(0, Math.floor(Number(ms) || 0));
+    var totalSec = Math.floor(ms / 1000);
+    var m = Math.floor(totalSec / 60);
+    var s = totalSec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
   };
 
   PVE.maybeAutoPotion = function (save, unit) {

@@ -1,17 +1,19 @@
 /**
  * Multi-map walker: Prontera 80×80 walled city, 100×100 starter field, 100×100 7-boss world.
- * Camera is a 23×23 window, player-centered, full screen.
+ * Camera is a 33×23 landscape window, player-centered, full screen.
  * Field/boss combat is real-time on the map (WORLD).
  */
 (function (root) {
   const DATA = root.DATA;
   const MAP = {};
 
+  MAP.VIEW_W = 33;
+  MAP.VIEW_H = 23;
   MAP.VIEW = 23;
   MAP.WORLD = 100;
   MAP.PATH_NODE_CAP = 2400;
   MAP.PAD_STEP_MS = 140;
-  MAP.COLS = 23;
+  MAP.COLS = 33;
   MAP.ROWS = 23;
   MAP.CITY = 80;
 
@@ -109,7 +111,7 @@
       return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
     }
     function reserved(x, y) {
-      return inDisk(x, y, spawn.x, spawn.y, 5) || inDisk(x, y, gate.x, gate.y, 3);
+      return inDisk(x, y, spawn.x, spawn.y, 5) || inDisk(x, y, gate.x, gate.y, 5);
     }
 
     const groveWant = 14 + Math.floor(rng() * 9);
@@ -189,9 +191,15 @@
     }
 
     clearDisk(g, spawn.x, spawn.y, 5);
-    clearDisk(g, gate.x, gate.y, 3);
-    g.cells[gate.x + "," + gate.y] = "X";
-    g.walkable[gate.y][gate.x] = true;
+    clearDisk(g, gate.x, gate.y, 5);
+    // 5-wide x 4-deep X pad around origin (2, n-4); every X tile warps to city.
+    for (let y = gate.y - 2; y <= gate.y + 2; y++) {
+      for (let x = gate.x - 1; x <= gate.x + 2; x++) {
+        if (y <= 0 || x <= 0 || y >= n - 1 || x >= n - 1) continue;
+        g.walkable[y][x] = true;
+        g.cells[x + "," + y] = "X";
+      }
+    }
     winding(spawn.x, spawn.y, n - 12, 14, 3);
     winding(gate.x, gate.y, 78, 72, 2);
     g.decor = g.decor.filter(function (d) {
@@ -462,15 +470,13 @@
       if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "B", true);
     });
 
-    // 7. Castle NORTH (separate from church). Keep D, gate K, north avenue open.
+    // 7. Castle NORTH (separate from church). Keep D, 3x3 K door, north avenue open.
     fill(34, 4, 46, 16, "D", false);
     fill(34, 4, 35, 5, "D", false);
     fill(45, 4, 46, 5, "D", false);
     fill(34, 15, 35, 16, "D", false);
     fill(45, 15, 46, 16, "D", false);
-    put(39, 16, ".", true);
-    put(40, 16, "K", true);
-    put(41, 16, ".", true);
+    fill(39, 14, 41, 16, "K", true);
     vStreet(39, 17, 29, 3);
 
     // 8. Church NE, own landmark. Body C, terracotta roof N, south courtyard.
@@ -481,17 +487,21 @@
     }
     fill(53, 21, 61, 24, "~", true);
 
-    // 9. West market: weapon shop on the 3-wide street, building north of it.
+    // 9. West market: W on the 3-wide street, 2 shop buildings (not a packed quarter).
     const wShop = { x: 24, y: 40 };
     put(wShop.x, wShop.y, "W", true);
     fill(23, 37, 25, 38, "H", false);
     fill(23, 36, 25, 36, "R", false);
+    fill(17, 37, 19, 38, "H", false);
+    fill(17, 36, 19, 36, "R", false);
 
-    // 10. East market: potion shop + matching building. Inn is visual-only.
+    // 10. East market: P on the street, 2 shop buildings + 1 visual inn house.
     const pShop = { x: 56, y: 40 };
     put(pShop.x, pShop.y, "P", true);
     fill(55, 37, 57, 38, "H", false);
     fill(55, 36, 57, 36, "R", false);
+    fill(61, 37, 63, 38, "H", false);
+    fill(61, 36, 63, 36, "R", false);
     fill(55, 46, 57, 46, "H", false);
     fill(55, 45, 57, 45, "R", false);
 
@@ -499,9 +509,10 @@
     const kafra = { x: 38, y: 49 };
     put(kafra.x, kafra.y, "S", true);
 
-    // 12. East field gate — only functional exit. Open the wall for a 3-wide passage.
-    fill(n - wallT, cy - 1, n - 1, cy + 1, ".", true);
-    put(n - wallT, cy, "G", true);
+    // 12. East field gatehouse — only functional exit. 5 wide x 4 deep, every tile G.
+    fill(n - 4, cy - 2, n - 1, cy + 2, "G", true);
+    fill(n - 4, cy - 4, n - 1, cy - 3, "#", false);
+    fill(n - 4, cy + 3, n - 1, cy + 4, "#", false);
 
     // 13. Four 8x8 parks: grass A + a few trees T.
     function stampPark(x0, y0, x1, y1) {
@@ -522,22 +533,36 @@
     stampPark(8, 64, 15, 71);
     stampPark(64, 64, 71, 71);
 
-    // 14. Residential lots only in SW / SE. 3x2 (roof+house) with 1-tile yards.
-    //     Skip anything no longer '?' (parks, inn, streets, plaza).
+    // 14. Airy house lots in SW / SE only. Each lot = 3-wide roof + 3-wide wall + yard.
+    //     Spaced with grass courtyards. Do not carpet vacant tiles with roofs.
     function stampLot(x0, y0) {
+      let roofN = 0;
       for (let dx = 0; dx < 3; dx++) {
         const x = x0 + dx;
-        if (kind[y0] && kind[y0][x] === "?") put(x, y0, (x + y0) % 2 ? "R" : "r", false);
+        if (kind[y0] && kind[y0][x] === "?") {
+          put(x, y0, (x + y0) % 2 ? "R" : "r", false);
+          roofN += 1;
+        }
         if (kind[y0 + 1] && kind[y0 + 1][x] === "?") put(x, y0 + 1, (x + y0) % 2 ? "H" : "h", false);
+        if (kind[y0 + 2] && kind[y0 + 2][x] === "?") put(x, y0 + 2, "A", true);
       }
+      return roofN >= 3;
     }
-    function stampResidential(x0, x1, y0, y1) {
-      for (let y = y0; y + 1 <= y1; y += 3) {
-        for (let x = x0; x + 2 <= x1; x += 4) stampLot(x, y);
-      }
-    }
-    stampResidential(4, 38, 42, 75);
-    stampResidential(42, 75, 42, 75);
+    const swLotPts = [
+      [6, 44], [16, 44], [26, 44],
+      [8, 54], [20, 54],
+      [18, 66], [28, 66],
+    ];
+    const seLotPts = [
+      [52, 44], [66, 44],
+      [52, 54], [64, 54],
+      [44, 56], [54, 64],
+      [46, 73],
+    ];
+    let swLotN = 0;
+    let seLotN = 0;
+    swLotPts.forEach(function (p) { if (stampLot(p[0], p[1])) swLotN += 1; });
+    seLotPts.forEach(function (p) { if (stampLot(p[0], p[1])) seLotN += 1; });
 
     // 15. Leftover vacant tiles become walkable grass courtyards, not roofs.
     for (let y = 0; y < n; y++) {
@@ -569,9 +594,9 @@
         delete cells[spawn.x + "," + spawn.y];
       }
     }
-    const gateSpawn = { x: 75, y: cy };
+    const gateSpawn = { x: 74, y: cy };
     if (!walkable[gateSpawn.y] || !walkable[gateSpawn.y][gateSpawn.x]) {
-      gateSpawn.x = n - wallT - ringT - 1;
+      gateSpawn.x = 75;
       walkable[gateSpawn.y][gateSpawn.x] = true;
     }
     const castleSpawn = { x: cx, y: 18 };
@@ -589,6 +614,7 @@
       gateSpawn: gateSpawn,
       castleSpawn: castleSpawn,
       fountain: { x: cx, y: cy },
+      houseLots: { sw: swLotN, se: seLotN },
       npcs: { W: wShop, P: pShop, S: kafra, K: { x: cx, y: 16 }, G: { x: n - wallT, y: cy } },
     };
   }
@@ -685,13 +711,14 @@
   };
 
   function cameraOrigin(px, py, cols, rows) {
-    const v = MAP.VIEW;
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
     let cx;
     let cy;
-    if (cols <= v) cx = 0;
-    else cx = Math.max(0, Math.min(cols - v, px - Math.floor(v / 2)));
-    if (rows <= v) cy = 0;
-    else cy = Math.max(0, Math.min(rows - v, py - Math.floor(v / 2)));
+    if (cols <= vw) cx = 0;
+    else cx = Math.max(0, Math.min(cols - vw, px - Math.floor(vw / 2)));
+    if (rows <= vh) cy = 0;
+    else cy = Math.max(0, Math.min(rows - vh, py - Math.floor(vh / 2)));
     return { x: cx, y: cy };
   }
 
@@ -1013,7 +1040,12 @@
     if (saveRef) saveRef.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(dx, dy) : "s";
     MAP.facing = saveRef && saveRef.facing;
     storePos(nx, ny);
+    if (saveRef) {
+      saveRef.walkFrame = saveRef.walkFrame === 1 ? 2 : 1;
+    }
     MAP.renderVisible();
+    const av = hostEl && hostEl.querySelector(".map-avatar");
+    if (av && root.FX && FX.markWalk) FX.markWalk(av);
     if (root.WORLD && WORLD.adjacentAggro) WORLD.adjacentAggro(nx, ny);
     return true;
   }
@@ -1041,9 +1073,18 @@
         walking = false;
         return;
       }
+      if (saveRef) saveRef.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(step.x - p.x, step.y - p.y) : "s";
+      MAP.facing = saveRef && saveRef.facing;
       storePos(step.x, step.y);
+      if (saveRef) saveRef.walkFrame = saveRef.walkFrame === 1 ? 2 : 1;
       MAP.renderVisible();
+      const av = hostEl && hostEl.querySelector(".map-avatar");
+      if (av && root.FX && FX.markWalk) FX.markWalk(av);
       if (root.WORLD && WORLD.adjacentAggro) WORLD.adjacentAggro(step.x, step.y);
+      if (root.WORLD && WORLD.holdIfInRange && WORLD.holdIfInRange()) {
+        walking = false;
+        return;
+      }
       if (steps.length) walkTimer = setTimeout(next, 90);
       else walking = false;
     }
@@ -1081,7 +1122,12 @@
     }
     const mob = nearestLivingMob(p);
     if (!mob) return;
-    if (Math.abs(p.x - mob.x) + Math.abs(p.y - mob.y) === 1) return;
+    const dist = Math.abs(p.x - mob.x) + Math.abs(p.y - mob.y);
+    const hid = saveRef.heroId;
+    const hold = (hid === "hunter" && root.WORLD && WORLD.HUNTER_RANGE)
+      ? WORLD.HUNTER_RANGE
+      : 1;
+    if (dist <= hold) return;
     const steps = MAP.path(p, { x: mob.x, y: mob.y });
     if (steps.length) walkPath(steps);
   }
@@ -1181,7 +1227,7 @@
   }
 
   function spriteSrc(heroId) {
-    const unit = { heroId: heroId, facing: (saveRef && saveRef.facing) || MAP.facing || "s" };
+    const unit = { heroId: heroId, facing: (saveRef && saveRef.facing) || MAP.facing || "s", walkFrame: saveRef && saveRef.walkFrame };
     if (root.FX && FX.spriteSrc) return FX.spriteSrc(heroId, unit);
     return "assets/chars/" + (heroId || "warrior") + "_s.png";
   }
@@ -1190,11 +1236,12 @@
     if (!hostEl) return;
     const p = pos();
     const sp = MAP.worldToScreen(p.x, p.y);
-    const view = MAP.VIEW;
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
     const avatar = hostEl.querySelector(".map-avatar");
     if (avatar) {
-      avatar.style.left = (sp.x * 100) / view + "%";
-      avatar.style.top = (sp.y * 100) / view + "%";
+      avatar.style.left = (sp.x * 100) / vw + "%";
+      avatar.style.top = (sp.y * 100) / vh + "%";
       const hid = (saveRef && saveRef.heroId) || "warrior";
       const face = (saveRef && saveRef.facing) || MAP.facing || "s";
       const img = avatar.querySelector("img.map-sprite");
@@ -1265,15 +1312,20 @@
       if (ch === "W") return '<span class="map-boss-lab">อาวุธ</span>';
       if (ch === "P") return '<span class="map-boss-lab">ยา</span>';
       if (ch === "S") return '<span class="map-boss-lab">คาฟร้า</span>';
-      if (ch === "K") return '<span class="map-boss-lab">ปราสาทโลหิต</span>';
-      if (ch === "G") return '<span class="map-boss-lab">ป่าสงบ</span>';
+      if (ch === "K") return x === 40 && y === 16 ? '<span class="map-boss-lab">ปราสาทโลหิต</span>' : "";
+      if (ch === "G") return x === 78 && y === 40 ? '<span class="map-boss-lab">ป่าสงบ</span>' : "";
       if (ch === "T" || ch === "#") return tileArt("assets/tiles/tree.png", "tree");
       if (ch === "B" || (walk && flowerAt(x, y))) return tileArt("assets/tiles/flowers.png", "flower");
       return "";
     }
     if (zoneId === "field") {
       const ch = fieldGrid.cells[x + "," + y] || "";
-      if (ch === "X") return '<span class="map-boss-emo">🚪</span><span class="map-boss-lab">กลับหมู่บ้าน</span>';
+      if (ch === "X") {
+        if (fieldGrid.gate && x === fieldGrid.gate.x && y === fieldGrid.gate.y) {
+          return '<span class="map-boss-emo">🚪</span><span class="map-boss-lab">กลับหมู่บ้าน</span>';
+        }
+        return "";
+      }
       if (!walk) {
         const dec = (fieldGrid.decor || []).find(function (d) {
           return d.x === x && d.y === y;
@@ -1291,10 +1343,11 @@
   function buildTilesHtml() {
     const z = zone();
     const cam = MAP.camera();
-    const view = MAP.VIEW;
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
     const tiles = [];
-    for (let sy = 0; sy < view; sy++) {
-      for (let sx = 0; sx < view; sx++) {
+    for (let sy = 0; sy < vh; sy++) {
+      for (let sx = 0; sx < vw; sx++) {
         const x = cam.x + sx;
         const y = cam.y + sy;
         const inMap = x >= 0 && y >= 0 && x < z.grid.cols && y < z.grid.rows;
@@ -1320,17 +1373,18 @@
   function updateTilesInPlace() {
     const z = zone();
     const cam = MAP.camera();
-    const view = MAP.VIEW;
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
     const tiles = hostEl.querySelectorAll(".map-tile");
-    if (tiles.length !== view * view) return false;
+    if (tiles.length !== vw * vh) return false;
     if (cam.x === lastCam.x && cam.y === lastCam.y) {
       paintPlayer();
       return true;
     }
     lastCam = { x: cam.x, y: cam.y };
     let i = 0;
-    for (let sy = 0; sy < view; sy++) {
-      for (let sx = 0; sx < view; sx++) {
+    for (let sy = 0; sy < vh; sy++) {
+      for (let sx = 0; sx < vw; sx++) {
         const x = cam.x + sx;
         const y = cam.y + sy;
         const el = tiles[i++];
@@ -1360,7 +1414,8 @@
     if (save && save.mapId && ZONES[save.mapId]) zoneId = save.mapId;
     const z = zone();
     const p = pos();
-    const view = MAP.VIEW;
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
     const cam = MAP.camera();
     const sp = { x: p.x - cam.x, y: p.y - cam.y };
     lastCam = { x: -999, y: -999 };
@@ -1369,17 +1424,17 @@
       '<div class="map-grid ' +
       z.theme +
       '" style="--cols:' +
-      view +
+      vw +
       ";--rows:" +
-      view +
+      vh +
       ";--view:" +
-      view +
+      vw +
       '">' +
       buildTilesHtml() +
       '<div class="map-avatar" style="left:' +
-      (sp.x * 100) / view +
+      (sp.x * 100) / vw +
       "%;top:" +
-      (sp.y * 100) / view +
+      (sp.y * 100) / vh +
       '%">' +
       '<img class="map-sprite hero" src="' +
       spriteSrc(hid) +

@@ -1408,10 +1408,13 @@
       const it = DATA.POTIONS[id];
       const n = PVE.potionCount(save, id);
       const can = save.zeno >= it.price;
+      const remain = PVE.potionBuffRemainMs(save, id);
+      const remainTxt = remain > 0 ? " · เหลือ " + PVE.fmtRemain(remain) : "";
       return (
         '<div class="item-row"><div><b>' + it.emoji + " " + it.name +
         "</b><div class=\"item-bon\">" + it.desc + " · มี " + n +
-        ' ขวด</div></div><div class="item-buy">' +
+        " ขวด" + remainTxt +
+        '</div></div><div class="item-buy">' +
         '<button type="button" class="btn small ' + (can ? "gold" : "disabled") + '" ' +
         (can ? 'onclick="App.buyPotion(\'' + id + "')\"" : "disabled") +
         ">ซื้อ " + it.price + "</button></div></div>"
@@ -1565,9 +1568,12 @@
     const rows = DATA.POTION_ORDER.map(function (id) {
       const it = DATA.POTIONS[id];
       const n = PVE.potionCount(save, id);
+      const remain = PVE.potionBuffRemainMs(save, id);
+      const remainTxt = remain > 0 ? " · เหลือ " + PVE.fmtRemain(remain) : "";
       return (
         '<div class="item-row"><div><b>' + it.emoji + " " + it.name +
         "</b><div class=\"item-bon\">" + it.desc + " · มี " + n +
+        remainTxt +
         '</div></div><button type="button" class="btn small gold" ' +
         (n ? 'onclick="App.usePotion(\'' + id + "')\"" : "disabled") +
         ">ใช้</button></div>"

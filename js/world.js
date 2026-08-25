@@ -11,8 +11,8 @@
   WORLD.TICK_MS = (DATA && DATA.WORLD_TICK_MS) || 50;
   WORLD.MOB_MOVE_MS = 380;
   WORLD.BOSS_MOVE_MS = 480;
-  WORLD.AGGRO_LEASH = 8;
-  WORLD.HUNTER_RANGE = 4;
+  WORLD.AGGRO_LEASH = 14;
+  WORLD.HUNTER_RANGE = 10;
   WORLD.WARRIOR_RANGE = 1;
 
   let S = null;
@@ -179,6 +179,15 @@
       if (root.FX && FX.mapFloater && S.hostEl) {
         const g = zoneGrid();
         FX.mapFloater(S.hostEl, ent.x, ent.y, g.cols, g.rows, text, kind);
+      }
+      if (kind === "dmg" || kind === "crit") {
+        if (root.AUDIO && AUDIO.onHitFx) {
+          if (atk.kind === "player") {
+            AUDIO.onHitFx(e, { attacker: "hero", heroId: atk.unit && atk.unit.heroId });
+          } else if (atk.monsterId) {
+            AUDIO.onHitFx(e, { attacker: "mob", monsterId: atk.monsterId });
+          }
+        }
       }
     });
   }
@@ -348,6 +357,16 @@
     paintHud(false);
   };
 
+  WORLD.holdIfInRange = function () {
+    if (!S || !S.player || S.player.dead) return false;
+    const tgt = WORLD.targetEntity();
+    if (!tgt || tgt.dead) return false;
+    const sid = basicSkillOf(S.player);
+    if (!sid || !inSkillRange(S.player, tgt, sid)) return false;
+    if (MAP && MAP.stopWalking) MAP.stopWalking();
+    return true;
+  };
+
   WORLD.clickEntity = function (ent) {
     if (!S || !ent || ent.dead) return;
     if (ent.kind === "player") return;
@@ -355,6 +374,8 @@
     if (S.mode === "arena") return;
     if (S.save && S.save.autoFarm) return;
     const p = playerPos();
+    const sid = basicSkillOf(S.player);
+    if (sid && inSkillRange(S.player, ent, sid)) return;
     if (manh(p, ent) <= 1) return;
     if (MAP && MAP.walkToAdjacent) MAP.walkToAdjacent(p, ent);
   };
@@ -436,7 +457,13 @@
     if (ent.unit) ent.unit.facing = ent.facing;
     ent.x = best.x;
     ent.y = best.y;
+    ent.walkFrame = ent.walkFrame === 1 ? 2 : 1;
+    if (ent.unit) ent.unit.walkFrame = ent.walkFrame;
     ent.moveReadyAt = nowMs() + delay;
+    if (S && S.hostEl) {
+      const el = S.hostEl.querySelector('[data-eid="' + ent.id + '"]');
+      if (el && root.FX && FX.markWalk) FX.markWalk(el);
+    }
   }
 
   function tickAggro(ent) {
@@ -500,7 +527,10 @@
       if (tgt) WORLD.setTarget(tgt.id);
     }
     if (!tgt) return;
-    if (manh(p, tgt) > 1) {
+    const sid = basicSkillOf(p);
+    if (sid && inSkillRange(p, tgt, sid)) {
+      if (MAP && MAP.stopWalking) MAP.stopWalking();
+    } else {
       if (MAP && MAP.isWalking && MAP.isWalking()) return;
       if (MAP && MAP.walkToAdjacent) MAP.walkToAdjacent(playerPos(), tgt);
       return;
@@ -728,7 +758,8 @@
       el.classList.toggle("targeted", S.targetId === e.id);
       el.classList.toggle("boss", e.kind === "boss");
       el.classList.toggle("dying", !!e.dead);
-      const view = (MAP && MAP.VIEW) || 23;
+      const vw = (MAP && MAP.VIEW_W) || 33;
+      const vh = (MAP && MAP.VIEW_H) || 23;
       let sx = e.x;
       let sy = e.y;
       if (MAP && MAP.worldToScreen && S.mode !== "arena") {
@@ -736,12 +767,12 @@
         sx = sp.x;
         sy = sp.y;
       }
-      if (sx < -1 || sy < -1 || sx > view || sy > view) {
+      if (sx < -1 || sy < -1 || sx > vw || sy > vh) {
         el.style.display = "none";
       } else {
         el.style.display = "";
-        el.style.left = (sx * 100 / view) + "%";
-        el.style.top = (sy * 100 / view) + "%";
+        el.style.left = (sx * 100 / vw) + "%";
+        el.style.top = (sy * 100 / vh) + "%";
       }
       const art = el.querySelector(".ent-art");
       const u = e.unit;
@@ -812,9 +843,10 @@
         av.innerHTML = '<img alt=""><small></small>';
         grid.appendChild(av);
       }
-      const view = (MAP && MAP.VIEW) || g.cols || 23;
-      av.style.left = e.x * (100 / view) + "%";
-      av.style.top = e.y * (100 / view) + "%";
+      const vw = g.cols || 23;
+      const vh = g.rows || 23;
+      av.style.left = e.x * (100 / vw) + "%";
+      av.style.top = e.y * (100 / vh) + "%";
       const img = av.querySelector("img");
       if (img) {
         img.className = "map-sprite hero";

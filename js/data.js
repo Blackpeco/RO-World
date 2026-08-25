@@ -54,6 +54,7 @@
   DATA.ASPD_RATE_CAP = 7;
   DATA.ASPD_RATE_NUMERATOR = 50;
   DATA.BERSERK_ASPD_MOD = 0.20;
+  DATA.BERSERK_DURATION_MS = 30 * 60 * 1000;
   /* Optional item fields (not on shop items yet): aspdPct (e.g. 0.20), aspdFlat (e.g. +2). */
   DATA.AUTO_POTION_HP = 0.4;
   DATA.AUTO_HEAL_SKILL_HP = 0.35;
@@ -1077,10 +1078,23 @@
     orange: { id: "orange", name: "ยาส้ม", emoji: "🟠", healHp: 600, healMp: 0, price: 80, desc: "ฟื้น HP 600" },
     white: { id: "white", name: "ยาขาว", emoji: "⚪", healHp: 1200, healMp: 0, price: 180, desc: "ฟื้น HP 1200" },
     blue: { id: "blue", name: "ยาฟ้า", emoji: "🔵", healHp: 0, healMp: 80, price: 60, desc: "ฟื้น MP 80" },
+    berserk: { id: "berserk", name: "Berserk Potion", emoji: "💢", healHp: 0, healMp: 0, price: 250, aspdMod: DATA.BERSERK_ASPD_MOD, durationMs: DATA.BERSERK_DURATION_MS, desc: "Potion ASPD +20% นาน 30 นาที" },
   };
-  DATA.POTION_ORDER = ["red", "orange", "white", "blue"];
+  DATA.POTION_ORDER = ["red", "orange", "white", "blue", "berserk"];
   DATA.emptyPotions = function () {
-    return { red: 0, orange: 0, white: 0, blue: 0 };
+    return { red: 0, orange: 0, white: 0, blue: 0, berserk: 0 };
+  };
+
+  DATA.activePotionAspdMod = function (buffs, now) {
+    now = now != null ? now : Date.now();
+    buffs = buffs || {};
+    var best = 0;
+    Object.keys(buffs).forEach(function (id) {
+      var b = buffs[id];
+      if (!b || !b.until || b.until <= now) return;
+      best = Math.max(best, Number(b.aspdMod) || 0);
+    });
+    return best;
   };
 
   DATA.SKILL_TREES = {

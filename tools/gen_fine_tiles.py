@@ -67,32 +67,37 @@ def paint_field_bg(w=384, h=216):
     px = im.load()
     for y in range(h):
         t = y / max(1, h - 1)
-        sky = mix((46, 78, 72), (22, 42, 32), t ** 0.85)
+        sky = mix((28, 62, 60), (10, 28, 26), t ** 0.78)
         for x in range(w):
-            mist = vnoise_wrap(x, y, 42, 3, w, h)
-            canopy = vnoise_wrap(x, y, 18, 8, w, h)
-            shaft = max(0.0, 1.0 - abs((x / w) - 0.28 - t * 0.18) * 7.0) * (1.0 - t) * 0.22
-            shaft2 = max(0.0, 1.0 - abs((x / w) - 0.62 - t * 0.12) * 8.0) * (1.0 - t) * 0.14
-            c = mix(sky, (70, 96, 78), mist * 0.28)
-            c = mix(c, (18, 36, 26), canopy * 0.35 * (1 - t * 0.4))
-            c = mix(c, (168, 190, 150), shaft + shaft2)
+            mist = vnoise_wrap(x, y, 48, 3, w, h)
+            mist2 = vnoise_wrap(x, y + 40, 28, 5, w, h)
+            canopy = vnoise_wrap(x, y, 16, 8, w, h)
+            dapple = vnoise_wrap(x, y, 7, 19, w, h)
+            shaft = max(0.0, 1.0 - abs((x / w) - 0.26 - t * 0.16) * 7.4) * (1.0 - t) * 0.2
+            shaft2 = max(0.0, 1.0 - abs((x / w) - 0.64 - t * 0.1) * 8.2) * (1.0 - t) * 0.12
+            c = mix(sky, (86, 120, 112), mist * 0.22)
+            c = mix(c, (54, 78, 74), mist2 * 0.16)
+            c = mix(c, (8, 22, 20), canopy * 0.42 * (1 - t * 0.35))
+            c = mix(c, (150, 186, 160), shaft + shaft2)
+            c = mix(c, (22, 48, 42), (dapple - 0.5) * 0.18 + 0.09)
             px[x, y] = c
     dr = ImageDraw.Draw(im, "RGBA")
-    # soft canopy silhouettes (no huts)
     blobs = [
-        (-20, -30, 90, 80),
-        (50, -40, 170, 70),
-        (140, -20, 250, 90),
-        (220, -50, 340, 60),
-        (300, -25, 400, 85),
-        (20, 8, 110, 95),
-        (180, 10, 280, 100),
-        (270, 5, 380, 88),
+        (-30, -36, 80, 72),
+        (40, -48, 168, 64),
+        (120, -28, 250, 88),
+        (210, -54, 340, 58),
+        (290, -32, 410, 82),
+        (8, 4, 108, 92),
+        (150, 6, 270, 104),
+        (260, 2, 390, 86),
+        (70, 18, 150, 110),
+        (200, 22, 300, 118),
     ]
     for i, (x0, y0, x1, y1) in enumerate(blobs):
-        a = 110 + (i * 17) % 50
-        dr.ellipse((x0, y0, x1, y1), fill=(16, 34, 24, a))
-    im = im.filter(ImageFilter.GaussianBlur(1.1))
+        a = 100 + (i * 19) % 60
+        dr.ellipse((x0, y0, x1, y1), fill=(8, 24, 22, a))
+    im = im.filter(ImageFilter.GaussianBlur(1.05))
     return im
 
 
@@ -108,22 +113,30 @@ def main():
     print("city_plaza", os.path.getsize(os.path.join(TILES, "city_plaza.png")))
 
     def moss_extra(x, y, col, w, h):
-        if h01(x, y, 91) < 0.02:
-            return mix(col, (36, 62, 48), 0.55)
-        if h01(x, y, 103) < 0.015:
-            return mix(col, (86, 118, 88), 0.4)
+        n = vnoise_wrap(x, y, 1.7, 61, w, h)
+        if n > 0.78:
+            return mix(col, (72, 118, 86), 0.35)
+        if h01(x, y, 91) < 0.03:
+            return mix(col, (18, 44, 38), 0.5)
+        if h01(x, y, 103) < 0.02:
+            return mix(col, (96, 148, 108), 0.32)
         return col
 
-    grass = grain_tile(128, 128, (36, 62, 46), (62, 96, 70), 11, moss_extra)
+    grass = grain_tile(128, 128, (18, 46, 40), (52, 92, 70), 11, moss_extra)
     grass.save(os.path.join(TILES, "grass.png"), optimize=True)
     print("grass", os.path.getsize(os.path.join(TILES, "grass.png")))
 
     def dirt_extra(x, y, col, w, h):
-        if h01(x, y, 5) < 0.03:
-            return mix(col, (72, 86, 52), 0.35)
+        pebble = h01(x, y, 5)
+        if pebble < 0.045:
+            return mix(col, (168, 142, 104), 0.4)
+        if pebble > 0.97:
+            return mix(col, (78, 60, 40), 0.35)
+        if h01(x, y, 19) < 0.02:
+            return mix(col, (58, 86, 56), 0.28)
         return col
 
-    path = grain_tile(128, 128, (96, 72, 48), (138, 108, 74), 7, dirt_extra)
+    path = grain_tile(128, 128, (118, 94, 64), (168, 140, 98), 7, dirt_extra)
     path.save(os.path.join(TILES, "path.png"), optimize=True)
     print("path", os.path.getsize(os.path.join(TILES, "path.png")))
 

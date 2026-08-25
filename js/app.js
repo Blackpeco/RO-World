@@ -535,7 +535,9 @@
       UI.toast(r.reason || "ใช้ยาไม่ได้");
       return;
     }
-    UI.toast((DATA.POTIONS[id] && DATA.POTIONS[id].name) + " +" + (r.healedHp || 0) + " HP +" + (r.healedMp || 0) + " MP");
+    const item = DATA.POTIONS[id];
+    if (r.buff) UI.toast(item.name + " · " + item.desc);
+    else UI.toast((item && item.name) + " +" + (r.healedHp || 0) + " HP +" + (r.healedMp || 0) + " MP");
     if (document.getElementById("bag-overlay") && document.getElementById("bag-overlay").className === "show") {
       UI.openBag(App.save);
     }
@@ -609,6 +611,7 @@
       App.save.cityPos = { x: gs.x, y: gs.y };
     }
     App.screen = "map";
+    if (typeof AUDIO !== "undefined" && AUDIO.bgm) AUDIO.bgm("city");
     UI.worldMap(App.save);
   };
 
@@ -623,6 +626,7 @@
       App.save.fieldPos = { x: fspawn.x, y: fspawn.y };
     }
     App.screen = "map";
+    if (typeof AUDIO !== "undefined" && AUDIO.bgm) AUDIO.bgm("field");
     UI.worldMap(App.save);
   };
 
@@ -651,6 +655,7 @@
     if (UI.closeBag) UI.closeBag();
     PVE.syncVitals(App.save);
     App._ended = false;
+    if (typeof AUDIO !== "undefined" && AUDIO.duckBgm) AUDIO.duckBgm();
     App.combat = PVE.startFight(App.save, bossId);
     App.flow = "pve";
     App.startCombatLoop();

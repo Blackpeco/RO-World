@@ -103,6 +103,13 @@
         FX.floater(e.side, String(amt), "dmg");
         FX.anim(e.side, e.side === "right" ? "hit-r" : "hit-l");
       }
+      if (root.AUDIO && AUDIO.onHitFx) {
+        const heroId = (root.App && App.save && App.save.heroId) ||
+          (root.App && App.combat && App.combat.left && App.combat.left.heroId) || "";
+        if (e.side === "right") {
+          AUDIO.onHitFx(e, { attacker: "hero", heroId: heroId });
+        }
+      }
     }
   };
 
@@ -148,8 +155,35 @@
     const hid = id || (unit && unit.heroId) || "warrior";
     const facing = (unit && (unit.facing || unit.dir)) || (typeof MAP !== "undefined" && MAP.facing) || "s";
     const art = FX.facingArt(facing);
-    const dirPath = "assets/chars/" + hid + "_" + art.base + ".png";
+    let dirPath = "assets/chars/" + hid + "_" + art.base + ".png";
+    const wf = unit && (unit.walkFrame || unit.step);
+    if (wf && (art.base === "s" || art.base === "se")) {
+      dirPath = "assets/chars/" + hid + "_s_w" + wf + ".png";
+    }
     return dirPath;
+  };
+
+  FX.markWalk = function (el) {
+    if (!el) return;
+    const next = el.getAttribute("data-step") === "a" ? "b" : "a";
+    el.setAttribute("data-step", next);
+    el.classList.remove("walking", "step-a", "step-b");
+    void el.offsetWidth;
+    el.classList.add("walking", "step-" + next);
+    let dust = el.querySelector(".walk-dust");
+    if (!dust) {
+      dust = document.createElement("i");
+      dust.className = "walk-dust";
+      el.appendChild(dust);
+    }
+    dust.classList.remove("puff");
+    void dust.offsetWidth;
+    dust.classList.add("puff");
+    clearTimeout(el._walkT);
+    el._walkT = setTimeout(function () {
+      el.classList.remove("walking");
+      if (dust) dust.classList.remove("puff");
+    }, 220);
   };
 
   FX.applyFacing = function (el, facing) {

@@ -1070,7 +1070,9 @@ textarea {
   pointer-events: none;
 }
 .map-grid.theme-city .map-tile.battlement {
-  background: linear-gradient(180deg, #b8b2a6 0%, #8a8478 100%);
+  background:
+    linear-gradient(90deg, transparent 8%, rgba(40, 36, 30, 0.18) 8% 12%, transparent 12% 88%, rgba(40, 36, 30, 0.18) 88% 92%, transparent 92%),
+    linear-gradient(180deg, #c4beb2 0 22%, #9a9488 22% 58%, #6e685c 100%);
 }
 .map-grid.theme-city .map-tile.keep {
   background: linear-gradient(180deg, #d09090 0%, #b06870 100%);
@@ -1180,12 +1182,34 @@ textarea {
     linear-gradient(180deg, #f4eee4, #e8dcc8);
 }
 .map-grid.theme-city .map-tile.keep-gate {
-  background: linear-gradient(180deg, #d09090, #b06870);
+  background:
+    linear-gradient(180deg, #d8a0a0 0 16%, #4a2024 16% 80%, #a06068 80%);
   box-shadow: 0 0 12px rgba(240, 200, 120, 0.5);
 }
+.map-grid.theme-city .map-tile.keep-gate::before {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 10%;
+  height: 72%;
+  background: radial-gradient(ellipse at 50% 110%, #2a1014 0 55%, transparent 58%);
+  pointer-events: none;
+}
 .map-grid.theme-city .map-tile.gate {
-  background: linear-gradient(180deg, #d4b898, #c4a888);
-  box-shadow: 0 0 12px rgba(160, 200, 120, 0.4);
+  background:
+    linear-gradient(180deg, #c8c0b0 0%, #8a8276 14%, #3a322c 20%, #241e1a 78%, #6a6258 88%, #9a9286 100%);
+  box-shadow: 0 0 10px rgba(160, 200, 120, 0.32);
+}
+.map-grid.theme-city .map-tile.gate::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 18%;
+  background: linear-gradient(180deg, #b8b2a6, #8a8478);
+  pointer-events: none;
 }
 .map-grid.theme-city .map-tile.shop .map-boss-lab,
 .map-grid.theme-city .map-tile.keep-gate .map-boss-lab,
@@ -1197,34 +1221,39 @@ textarea {
 
 .world-map.field, .map-grid.theme-field {
   background:
-    radial-gradient(ellipse 55% 36% at 28% 0%, rgba(186, 210, 170, 0.16), transparent 58%),
-    radial-gradient(ellipse 40% 50% at 72% 8%, rgba(150, 180, 140, 0.1), transparent 52%),
-    linear-gradient(180deg, rgba(18, 36, 26, 0.42), transparent 38%),
+    radial-gradient(ellipse 38% 26% at 24% 6%, rgba(170, 210, 190, 0.14), transparent 56%),
+    radial-gradient(ellipse 28% 20% at 70% 16%, rgba(210, 230, 200, 0.07), transparent 50%),
+    radial-gradient(ellipse 52% 38% at 50% 100%, rgba(6, 18, 16, 0.5), transparent 58%),
+    linear-gradient(180deg, rgba(10, 26, 24, 0.52), transparent 40%),
     url("../assets/tiles/field_bg.png") center / cover no-repeat,
-    linear-gradient(180deg, #2a4a38 0%, #1c3228 48%, #24382c 100%);
+    linear-gradient(180deg, #16362e 0%, #10241e 48%, #183028 100%);
 }
 .map-grid.theme-field .map-tile.path {
-  background-color: #3d6a4c;
+  background-color: #245044;
   background-image:
-    linear-gradient(180deg, rgba(48, 78, 58, 0.22), rgba(28, 52, 38, 0.16)),
+    radial-gradient(circle at 28% 22%, rgba(150, 200, 170, 0.14), transparent 40%),
+    radial-gradient(circle at 72% 78%, rgba(12, 28, 24, 0.2), transparent 48%),
+    linear-gradient(180deg, rgba(20, 44, 38, 0.28), rgba(12, 32, 28, 0.18)),
     url("../assets/tiles/grass.png");
-  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
-  background-repeat: no-repeat, repeat;
+  background-size: 100% 100%, 100% 100%, 100% 100%, calc(100% / 9) calc(100% / 9);
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
   border: none;
 }
 .map-grid.theme-field .map-tile.path.trail {
-  background-color: #6a5030;
+  background-color: #5a4a32;
   background-image:
-    linear-gradient(180deg, rgba(150, 118, 74, 0.2), rgba(90, 68, 42, 0.14)),
+    linear-gradient(180deg, rgba(130, 108, 72, 0.12), rgba(70, 56, 38, 0.1)),
     url("../assets/tiles/path.png");
   background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
   background-repeat: no-repeat, repeat;
 }
 .map-grid.theme-field .map-tile.block {
-  background-color: #2a4634;
-  background-image: url("../assets/tiles/grass.png");
-  background-size: calc(100% / 9) calc(100% / 9);
-  background-repeat: repeat;
+  background-color: #1a342c;
+  background-image:
+    radial-gradient(circle at 40% 30%, rgba(10, 24, 20, 0.22), transparent 55%),
+    url("../assets/tiles/grass.png");
+  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
+  background-repeat: no-repeat, repeat;
 }
 .map-grid.theme-field .map-tile.flower::after {
   content: none;
@@ -1246,11 +1275,11 @@ textarea {
 }
 .map-grid.theme-field .map-tile.gate {
   background-image:
-    radial-gradient(circle at 50% 40%, rgba(220, 190, 120, 0.4), rgba(80, 60, 30, 0.15)),
+    radial-gradient(circle at 50% 40%, rgba(220, 200, 140, 0.28), rgba(50, 40, 24, 0.12)),
     url("../assets/tiles/path.png");
   background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
   background-repeat: no-repeat, repeat;
-  box-shadow: 0 0 12px rgba(160, 200, 120, 0.4);
+  box-shadow: 0 0 10px rgba(150, 190, 130, 0.32);
 }
 
 .map-tile-art {
@@ -1271,6 +1300,7 @@ textarea {
   left: -10%;
   top: auto;
   bottom: -4%;
+  filter: drop-shadow(0 2px 5px rgba(6, 18, 14, 0.5)) saturate(1.1) contrast(1.06);
 }
 .map-tile-art.rock {
   width: 78%;
@@ -1449,7 +1479,7 @@ textarea {
   .rt-bar { justify-content: flex-start; }
 }
 
-/* ---- fullscreen 23×23 camera + overlay HUD ---- */
+/* ---- fullscreen 33×23 landscape camera + overlay HUD ---- */
 body.walking { overflow: hidden; }
 body.walking #title-bar { display: none; }
 body.walking #screen {
@@ -1474,16 +1504,18 @@ body.walking #screen {
 
 .map-fs .map-grid,
 .world-map.fs .map-grid {
-  --view: 23;
-  --tile: min(calc(100vw / 23), calc(100vh / 23));
+  --view-w: 33;
+  --view-h: 23;
+  --view: 33;
+  --tile: min(calc(100vw / 33), calc(100vh / 23));
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: calc(var(--tile) * 23);
+  width: calc(var(--tile) * 33);
   height: calc(var(--tile) * 23);
   display: grid;
-  grid-template-columns: repeat(23, var(--tile));
+  grid-template-columns: repeat(33, var(--tile));
   grid-template-rows: repeat(23, var(--tile));
   aspect-ratio: auto;
 }
@@ -1497,7 +1529,7 @@ body.walking #screen {
 /* 2.5D sprites: feet on tile, overflow upward */
 .map-avatar,
 .map-ent {
-  width: calc(100% / var(--cols, 23));
+  width: calc(100% / var(--cols, 33));
   height: calc(100% / var(--rows, 23));
   overflow: visible;
 }
@@ -2079,3 +2111,45 @@ body.walking #screen {
 .city-win { position: relative; }
 
 .map-avatar, .map-ent { --face-sx: 1; }
+
+.map-avatar.walking .map-sprite,
+.map-ent.walking .map-sprite {
+  animation: none;
+}
+.map-avatar.walking.step-a .map-sprite,
+.map-ent.walking.step-a .map-sprite {
+  animation: walkStrideA 0.2s ease-out;
+}
+.map-avatar.walking.step-b .map-sprite,
+.map-ent.walking.step-b .map-sprite {
+  animation: walkStrideB 0.2s ease-out;
+}
+@keyframes walkStrideA {
+  0% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(0) rotate(0deg); }
+  40% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(-12%) rotate(calc(var(--face-sx, 1) * -8deg)) scaleY(0.96); }
+  100% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(0) rotate(0deg); }
+}
+@keyframes walkStrideB {
+  0% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(0) rotate(0deg); }
+  40% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(-12%) rotate(calc(var(--face-sx, 1) * 8deg)) scaleY(0.96); }
+  100% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(0) rotate(0deg); }
+}
+.walk-dust {
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  width: 18px;
+  height: 8px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 230, 0.0);
+  pointer-events: none;
+  z-index: 4;
+}
+.walk-dust.puff {
+  animation: walkDust 0.22s ease-out;
+}
+@keyframes walkDust {
+  0% { opacity: 0.7; transform: scale(0.4); background: rgba(255, 248, 210, 0.55); }
+  100% { opacity: 0; transform: scale(1.8) translateY(2px); }
+}

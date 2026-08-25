@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const ctx = { console, Math, Date, Object, Array, Number, String, Boolean, Error };
 vm.createContext(ctx);
-for (const f of ["data.js", "stats.js", "combat.js", "pve.js", "map.js", "world.js", "fx.js"]) {
+for (const f of ["data.js", "stats.js", "combat.js", "pve.js", "map.js", "world.js", "audio.js", "fx.js"]) {
   vm.runInContext(readFileSync(join(root, "js", f), "utf8"), ctx, { filename: f });
 }
 
@@ -312,7 +312,7 @@ console.log("high-tier shop items");
 
 console.log("world map connectivity");
 {
-  assert(MAP.VIEW === 23, "camera 23");
+  assert(MAP.VIEW_W === 33 && MAP.VIEW_H === 23, "camera 33x23");
   assert(MAP.ZONES.bosses.grid.cols === 100 && MAP.ZONES.bosses.grid.rows === 100, "boss world 100x100");
   assert(MAP.bossList.length === 7, "7 boss markers");
   assert(MAP.isWalkable(MAP.SPAWN.x, MAP.SPAWN.y), "spawn walkable");
@@ -395,20 +395,44 @@ console.log("prontera + field connectivity");
     if (ch === "#") wallN += 1;
   });
   assert(fountainN >= 8, "multi-tile fountain, got " + fountainN);
-  assert(houseN >= 80, "townhouse blocks present, got " + houseN);
+  assert(houseN >= 36 && houseN <= 160, "airy house lots, got " + houseN);
   assert(wallN >= 100, "city walls present, got " + wallN);
   assert(spawn.x === 40 && spawn.y === 51, "spawn at 40,51, got " + spawn.x + "," + spawn.y);
-  const expectNpc = { W: [24, 40], P: [56, 40], S: [38, 49], K: [40, 16], G: [78, 40] };
-  [["weapon", "W"], ["potion", "P"], ["kafra", "S"], ["castle", "K"], ["gate", "G"]].forEach(function (row) {
-    const at = findCell(row[1]);
-    assert(at, row[0] + " exists in Prontera");
-    if (!at) return;
-    const exp = expectNpc[row[1]];
-    assert(at.x === exp[0] && at.y === exp[1], row[0] + " at " + exp[0] + "," + exp[1] + " got " + at.x + "," + at.y);
+  assert(cg.cells["24,40"] === "W", "weapon cell 24,40 is W, got " + cg.cells["24,40"]);
+  assert(cg.cells["56,40"] === "P", "potion cell 56,40 is P, got " + cg.cells["56,40"]);
+  assert(cg.cells["38,49"] === "S", "kafra cell 38,49 is S, got " + cg.cells["38,49"]);
+  assert(cg.cells["40,16"] === "K" && MAP.isWalkable(40, 16), "castle K at 40,16 walkable");
+  assert(cg.cells["78,40"] === "G" && MAP.isWalkable(78, 40), "gate G at 78,40 walkable");
+  [["weapon", 24, 40], ["potion", 56, 40], ["kafra", 38, 49], ["castle", 40, 16], ["gate", 78, 40]].forEach(function (row) {
+    const at = { x: row[1], y: row[2] };
     assert(MAP.isWalkable(at.x, at.y), row[0] + " walkable");
-    const path = MAP.path(spawn, { x: at.x, y: at.y });
+    const path = MAP.path(spawn, at);
     assert(path.length > 0, row[0] + " reachable from spawn (" + at.x + "," + at.y + ")");
   });
+  let extraG = 0;
+  let extraK = 0;
+  Object.keys(cg.cells).forEach(function (k) {
+    const ch = cg.cells[k];
+    const p = k.split(",");
+    const x = Number(p[0]);
+    const y = Number(p[1]);
+    if (ch === "G") {
+      if (k !== "78,40") extraG += 1;
+      const npc = MAP.npcAt(x, y);
+      assert(npc && npc.id === "field", "G tile " + k + " npcAt field");
+      assert(MAP.gateAt(x, y) === "field", "G tile " + k + " gateAt field");
+      assert(MAP.isWalkable(x, y), "G tile " + k + " walkable");
+    }
+    if (ch === "K") {
+      if (k !== "40,16") extraK += 1;
+      const npc = MAP.npcAt(x, y);
+      assert(npc && npc.id === "castle", "K tile " + k + " npcAt castle");
+      assert(MAP.gateAt(x, y) === "bosses", "K tile " + k + " gateAt bosses");
+      assert(MAP.isWalkable(x, y), "K tile " + k + " walkable");
+    }
+  });
+  assert(extraG >= 4, "G pad has extra tiles, got " + extraG);
+  assert(extraK >= 4, "K pad has extra tiles, got " + extraK);
   let fountainCore = 0;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -444,12 +468,23 @@ console.log("prontera + field connectivity");
   assert(mobs.length >= 20, "many field spawns, got " + mobs.length);
   const kinds = {};
   mobs.forEach(function (m) { kinds[m.monsterId] = m; });
-  ["poring", "fabre", "lunatic", "willow", "condor"].forEach(function (id) {
+  ["poring", "fabre", "lunatic", "willow", "condor", "wolf", "poporing", "chonchon", "roda_frog", "spore", "rocker", "steel_chonchon", "savage_babe", "elder_willow", "skeleton"].forEach(function (id) {
     assert(kinds[id], id + " present on field");
     assert(MAP.isWalkable(kinds[id].x, kinds[id].y), id + " walkable");
     const path = MAP.path(fz.spawn, { x: kinds[id].x, y: kinds[id].y });
     assert(path.length > 0, id + " reachable from spawn");
   });
+  let xN = 0;
+  Object.keys(fz.grid.cells).forEach(function (k) {
+    if (fz.grid.cells[k] !== "X") return;
+    xN += 1;
+    const p = k.split(",");
+    const x = Number(p[0]);
+    const y = Number(p[1]);
+    assert(MAP.isWalkable(x, y), "X tile " + k + " walkable");
+    assert(MAP.gateAt(x, y) === "city", "X tile " + k + " gateAt city");
+  });
+  assert(xN >= 6, "field X pad has several tiles, got " + xN);
   MAP.setZone("bosses");
   assert(MAP.isWalkable(MAP.SPAWN.x, MAP.SPAWN.y), "reset to boss spawn");
 }
@@ -497,6 +532,34 @@ console.log("potion heal amounts + stacks");
   assert(!fail.ok, "cannot drink empty stack");
   const buy = PVE.buyPotion(save, "orange");
   assert(buy.ok && save.potions.orange === 1 && save.zeno === DATA.START_ZENO - 80, "buy orange");
+}
+
+console.log("berserk potion + potion ASPD buffs");
+{
+  const bz = DATA.POTIONS.berserk;
+  assert(!!bz, "DATA.POTIONS.berserk exists");
+  assert(bz.aspdMod === 0.20, "berserk aspdMod === 0.20, got " + bz.aspdMod);
+  assert(bz.durationMs === 30 * 60 * 1000, "berserk durationMs === 30min, got " + bz.durationMs);
+  assert(bz.price === 250, "berserk price === 250, got " + bz.price);
+  assert(DATA.POTION_ORDER.indexOf("berserk") !== -1, "POTION_ORDER includes berserk");
+  const empty = DATA.emptyPotions();
+  assert(empty.berserk === 0, "emptyPotions has berserk: 0");
+  const save = PVE.createSave("warrior", DATA.emptyAllocated());
+  PVE.syncVitals(save);
+  const hp0 = save.hp;
+  const mp0 = save.mp;
+  save.potions.berserk = 1;
+  const now = Date.now();
+  const r = PVE.usePotion(save, "berserk");
+  assert(r.ok, "usePotion berserk ok");
+  assert(save.hp === hp0 && save.mp === mp0, "berserk does not change HP/MP");
+  assert(save.potionBuffs && save.potionBuffs.berserk, "potionBuffs.berserk applied");
+  const until = save.potionBuffs.berserk.until;
+  const delta = until - now;
+  assert(delta > 30 * 60 * 1000 - 2000 && delta < 30 * 60 * 1000 + 2000, "until ~ now+30min, delta=" + delta);
+  assert(DATA.activePotionAspdMod(save.potionBuffs) === 0.20, "activePotionAspdMod === 0.20 while active");
+  assert(DATA.activePotionAspdMod({ berserk: { until: now - 1, aspdMod: 0.20 } }, now) === 0, "expired buff → 0");
+  assert(!(DATA.START_POTIONS && DATA.START_POTIONS.berserk), "not given in START_POTIONS");
 }
 
 console.log("field monsters + field rewards");
@@ -875,19 +938,22 @@ console.log("crit is physical only / magic path unchanged");
   assert(h.damage === 160, "hybrid crit 100+60=160, got " + h.damage);
 }
 
-console.log("hunter range 4 / warrior range 1");
+console.log("hunter range 10 / warrior range 1");
 {
   const WORLD = ctx.WORLD;
-  assert(WORLD && WORLD.HUNTER_RANGE === 4, "HUNTER_RANGE 4, got " + (WORLD && WORLD.HUNTER_RANGE));
+  assert(WORLD && WORLD.HUNTER_RANGE === 10, "HUNTER_RANGE 10, got " + (WORLD && WORLD.HUNTER_RANGE));
   assert(WORLD.WARRIOR_RANGE === 1, "WARRIOR_RANGE 1, got " + WORLD.WARRIOR_RANGE);
   const hunter = { unit: { heroId: "hunter" } };
   const warrior = { unit: { heroId: "warrior" } };
-  assert(WORLD.skillRange(hunter, "arrowshot") === 4, "hunter arrowshot range 4");
-  assert(WORLD.skillRange(hunter, "powershot") === 4, "hunter powershot range 4");
-  assert(WORLD.skillRange(hunter, "soularrow") === 4, "hunter soularrow range 4");
+  assert(WORLD.skillRange(hunter, "arrowshot") === 10, "hunter arrowshot range 10");
+  assert(WORLD.skillRange(hunter, "powershot") === 10, "hunter powershot range 10");
+  assert(WORLD.skillRange(hunter, "soularrow") === 10, "hunter soularrow range 10");
   assert(WORLD.skillRange(warrior, "attack") === 1, "warrior attack range 1");
   assert(WORLD.skillRange(warrior, "magifireblade") === 1, "warrior magifireblade range 1");
   assert(WORLD.skillRange(warrior, "blade_storm") === 1, "warrior blade_storm range 1");
+  const assassin = { unit: { heroId: "assassin" } };
+  assert(WORLD.skillRange(assassin, "stab") === 1, "assassin stab range 1");
+  assert(WORLD.AGGRO_LEASH === 14, "AGGRO_LEASH 14, got " + WORLD.AGGRO_LEASH);
 }
 
 console.log("8-dir facing");
@@ -910,6 +976,39 @@ console.log("8-dir facing");
   assert(src === "assets/chars/warrior_e.png", "east sprite file, got " + src);
   const srcW = FX.spriteSrc("hunter", { heroId: "hunter", facing: "w" });
   assert(srcW === "assets/chars/hunter_e.png", "west uses east file, got " + srcW);
+  const w1 = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s", walkFrame: 1 });
+  const w2 = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s", walkFrame: 2 });
+  assert(w1 === "assets/chars/warrior_s_w1.png", "south walk 1, got " + w1);
+  assert(w2 === "assets/chars/warrior_s_w2.png", "south walk 2, got " + w2);
+  const idle = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s" });
+  assert(idle === "assets/chars/warrior_s.png", "idle south, got " + idle);
+  const nWalk = FX.spriteSrc("hunter", { heroId: "hunter", facing: "n", walkFrame: 1 });
+  assert(nWalk === "assets/chars/hunter_n.png", "north walk keeps 8-dir sprite, got " + nWalk);
+}
+
+console.log("audio helper");
+{
+  const AUDIO = ctx.AUDIO;
+  assert(!!AUDIO, "AUDIO exists");
+  assert(AUDIO.sfxUrl("hit_slash") === "assets/sfx/hit_slash.ogg", "hit_slash path");
+  assert(AUDIO.bgmUrl("city") === "assets/bgm/city.ogg", "city bgm path");
+  assert(AUDIO.bgmUrl("field") === "assets/bgm/field.ogg", "field bgm path");
+  assert(AUDIO.isMeleeHero("warrior") === true, "warrior melee");
+  assert(AUDIO.isMeleeHero("assassin") === true, "assassin melee");
+  assert(AUDIO.isMeleeHero("hunter") === false, "hunter not melee");
+  assert(AUDIO.mobAttackId("poring") === "mob_poring_attack", "poring attack id");
+  assert(AUDIO.mobAttackId("steel_chonchon") === "mob_steel_chonchon_attack", "steel_chonchon attack id");
+  assert(AUDIO.mobAttackId("unknown") === "", "unknown mob silent");
+  const hit = AUDIO.onHitFx({ kind: "dmg", amount: 12 }, { attacker: "hero", heroId: "warrior" });
+  assert(hit === "hit_slash", "melee connect plays hit_slash");
+  const miss = AUDIO.onHitFx({ kind: "miss", amount: 0 }, { attacker: "hero", heroId: "warrior" });
+  assert(miss === false, "miss is silent");
+  const bow = AUDIO.onHitFx({ kind: "dmg", amount: 12 }, { attacker: "hero", heroId: "hunter" });
+  assert(bow === false, "hunter connect does not play slash");
+  const mob = AUDIO.onHitFx({ kind: "dmg", amount: 8 }, { attacker: "mob", monsterId: "poring" });
+  assert(mob === "mob_poring_attack", "poring land plays mob attack");
+  const poison = AUDIO.onHitFx({ kind: "dmg", amount: 5, poison: true }, { attacker: "mob", monsterId: "poporing" });
+  assert(poison === false, "poison tick silent");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");
