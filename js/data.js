@@ -98,6 +98,7 @@
   DATA.HEROES = {
     warrior: {
       id: "warrior",
+      job: "swordsman",
       name: "นักรบผู้กล้า",
       emoji: "⚔️",
       color: "#d4a017",
@@ -119,6 +120,7 @@
     },
     assassin: {
       id: "assassin",
+      job: "thief",
       name: "มือสังหารเงา",
       emoji: "🥷",
       color: "#7b3fa0",
@@ -140,6 +142,7 @@
     },
     hunter: {
       id: "hunter",
+      job: "archer",
       name: "นักล่าผู้ใช้เหยี่ยว",
       emoji: "🦅",
       color: "#3d8b4a",
@@ -159,6 +162,34 @@
       accuracy: 100,
       skills: ["arrowshot", "powershot", "focus", "soularrow"],
     },
+  };
+
+  DATA.JOB_LABEL = { swordsman:"Swordsman", thief:"Thief", merchant:"Merchant", archer:"Archer", acolyte:"Acolyte", mage:"Mage" };
+  DATA.JOB_ALL = ["swordsman","thief","merchant","archer","acolyte","mage"];
+  DATA.JOB_HEAVY = ["swordsman","thief","merchant"];  // high Hard DEF
+  DATA.JOB_MID = ["thief","archer","acolyte"];        // mid Hard DEF
+  DATA.JOB_SWORD = ["swordsman"];
+  DATA.JOB_DAGGER = ["thief","mage","archer"];
+  DATA.JOB_BOW = ["archer"];
+  DATA.JOB_STAFF = ["mage","acolyte"];
+  DATA.JOB_AXE = ["swordsman","merchant"];
+  DATA.JOB_MACE = ["acolyte","merchant"];
+  DATA.heroJob = function(heroId){ var h=DATA.HEROES[heroId]; return (h && h.job) || heroId; };
+  DATA.itemJobs = function(item){ if(!item || item.jobs==="all" || !item.jobs) return DATA.JOB_ALL; return item.jobs; };
+  DATA.canJobWear = function(heroId, item){ return DATA.itemJobs(item).indexOf(DATA.heroJob(heroId))>=0; };
+  DATA.jobsText = function(item){ if(!item || item.jobs==="all" || !item.jobs) return "ทุกอาชีพ"; return item.jobs.map(function(j){ return DATA.JOB_LABEL[j]||j; }).join(" / "); };
+  DATA.itemStatLine = function (it) {
+    if (!it) return "";
+    const parts = [];
+    if (it.type === "weapon") {
+      if (it.weaponMatk) parts.push("Weapon MATK " + it.weaponMatk);
+      else parts.push("Weapon ATK " + (it.weaponAtk || 0));
+    } else if (it.bonuses && it.bonuses.hardDef) {
+      parts.push("Hard DEF " + it.bonuses.hardDef);
+    }
+    parts.push(DATA.jobsText(it));
+    if (it.reqLevel) parts.push("ต้องการ Lv " + it.reqLevel);
+    return parts.join(" · ");
   };
 
   DATA.SKILLS = {
@@ -981,10 +1012,10 @@
   ];
 
   DATA.ITEMS = {
-    helm_leather: { id: "helm_leather", type: "helm", name: "หมวกหนังสัตว์", price: 80, bonuses: { hp: 30 } },
-    helm_iron: { id: "helm_iron", type: "helm", name: "หมวกเหล็ก", price: 150, bonuses: { hp: 60, statusResist: 1, def: 3 } },
-    helm_wizard: { id: "helm_wizard", type: "helm", name: "ฮู้ดพ่อมด", price: 160, bonuses: { matk: 15, crit: 2 } },
-    helm_crown: { id: "helm_crown", type: "helm", name: "มงกุฎราชัน", price: 320, bonuses: { hp: 50, atk: 10, matk: 10 } },
+    helm_leather: { id: "helm_leather", type: "helm", name: "หมวกผ้า", price: 80, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    helm_iron: { id: "helm_iron", type: "helm", name: "หมวกหนัง", price: 150, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 3 } },
+    helm_wizard: { id: "helm_wizard", type: "helm", name: "หมวกสำรวจ", price: 160, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 4 } },
+    helm_crown: { id: "helm_crown", type: "helm", name: "หมวกเหล็ก", price: 320, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 5 } },
 
     eyes_hunter: { id: "eyes_hunter", type: "eyes", name: "แว่นตาล่าสัตว์", price: 90, bonuses: { accuracy: 3 } },
     eyes_pirate: { id: "eyes_pirate", type: "eyes", name: "ผ้าปิดตาโจรสลัด", price: 100, bonuses: { crit: 3 } },
@@ -996,30 +1027,44 @@
     mouth_pipe: { id: "mouth_pipe", type: "mouth", name: "ท่อหายใจเวทมนตร์", price: 200, bonuses: { mp: 25, mpRegen: 3 } },
     mouth_dragon: { id: "mouth_dragon", type: "mouth", name: "สร้อยคางมังกร", price: 250, bonuses: { atk: 25, hpRegen: 4 } },
 
-    armor_rough: { id: "armor_rough", type: "armor", name: "เสื้อผ้าหยาบ", price: 150, bonuses: { vit: 3 } },
-    armor_chain: { id: "armor_chain", type: "armor", name: "เกราะโซ่", price: 250, bonuses: { hp: 250, hpRegen: 5, def: 10 } },
-    armor_robe: { id: "armor_robe", type: "armor", name: "ชุดคลุมนักเวท", price: 400, bonuses: { matk: 30, mp: 20, mdef: 10 } },
-    armor_knight: { id: "armor_knight", type: "armor", name: "เกราะอัศวินแท้", price: 500, bonuses: { hp: 1000, statusResist: 5, def: 25 } },
+    armor_rough: { id: "armor_rough", type: "armor", name: "เสื้อผ้าฝ้าย", price: 150, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    armor_chain: { id: "armor_chain", type: "armor", name: "ชุดผจญภัย", price: 250, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 5 } },
+    armor_robe: { id: "armor_robe", type: "armor", name: "ชุดคลุม", price: 400, jobs: "all", defTier: "low", bonuses: { hardDef: 2 } },
+    armor_knight: { id: "armor_knight", type: "armor", name: "เกราะโซ่", price: 500, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 8 } },
 
-    weapon_short: { id: "weapon_short", type: "weapon", name: "ดาบสั้นฝึกซ้อม", price: 200, bonuses: { atk: 20, str: 2 } },
-    weapon_staff: { id: "weapon_staff", type: "weapon", name: "คทาฝึกเวท", price: 200, bonuses: { matk: 20, int: 2 } },
-    weapon_long: { id: "weapon_long", type: "weapon", name: "ดาบยาวแกร่ง", price: 500, bonuses: { atk: 30, crit: 4 } },
-    weapon_arch: { id: "weapon_arch", type: "weapon", name: "คทามหาเวท", price: 600, bonuses: { matk: 50, mdef: 10 } },
+    weapon_short: { id: "weapon_short", type: "weapon", name: "ดาบสั้นฝึกซ้อม", price: 200, weaponClass: "sword", weaponAtk: 70, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
+    weapon_long: { id: "weapon_long", type: "weapon", name: "ดาบยาว", price: 600, weaponClass: "sword", weaponAtk: 120, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
+    weapon_void: { id: "weapon_void", type: "weapon", name: "ดาบราชัน", price: 1500, weaponClass: "sword", weaponAtk: 200, weaponMatk: 0, reqLevel: 35, element: "none", jobs: DATA.JOB_SWORD, bonuses: {}, tier: "high" },
+    weapon_knife: { id: "weapon_knife", type: "weapon", name: "มีดสั้นฝึก", price: 180, weaponClass: "dagger", weaponAtk: 40, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
+    weapon_dirk: { id: "weapon_dirk", type: "weapon", name: "กริช", price: 500, weaponClass: "dagger", weaponAtk: 75, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
+    weapon_shadow: { id: "weapon_shadow", type: "weapon", name: "กริชเงา", price: 1200, weaponClass: "dagger", weaponAtk: 120, weaponMatk: 0, reqLevel: 30, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {}, tier: "high" },
+    weapon_bow: { id: "weapon_bow", type: "weapon", name: "ธนูฝึกยิง", price: 200, weaponClass: "bow", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
+    weapon_oakbow: { id: "weapon_oakbow", type: "weapon", name: "ธนูไม้โอ๊ค", price: 550, weaponClass: "bow", weaponAtk: 100, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
+    weapon_hawk: { id: "weapon_hawk", type: "weapon", name: "ธนูเหยี่ยว", price: 1400, weaponClass: "bow", weaponAtk: 150, weaponMatk: 0, reqLevel: 32, element: "none", jobs: DATA.JOB_BOW, bonuses: {}, tier: "high" },
+    weapon_staff: { id: "weapon_staff", type: "weapon", name: "คทาฝึกเวท", price: 200, weaponClass: "staff", weaponAtk: 0, weaponMatk: 100, reqLevel: 1, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
+    weapon_arch: { id: "weapon_arch", type: "weapon", name: "คทาไม้", price: 650, weaponClass: "staff", weaponAtk: 0, weaponMatk: 170, reqLevel: 14, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
+    weapon_sage: { id: "weapon_sage", type: "weapon", name: "คทามหาเวท", price: 1600, weaponClass: "staff", weaponAtk: 0, weaponMatk: 260, reqLevel: 36, element: "none", jobs: DATA.JOB_STAFF, bonuses: {}, tier: "high" },
+    weapon_hatchet: { id: "weapon_hatchet", type: "weapon", name: "ขวานไม้", price: 220, weaponClass: "axe", weaponAtk: 100, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_AXE, bonuses: {} },
+    weapon_battleaxe: { id: "weapon_battleaxe", type: "weapon", name: "ขวานต่อสู้", price: 700, weaponClass: "axe", weaponAtk: 160, weaponMatk: 0, reqLevel: 16, element: "none", jobs: DATA.JOB_AXE, bonuses: {} },
+    weapon_waraxe: { id: "weapon_waraxe", type: "weapon", name: "ขวานสงคราม", price: 1600, weaponClass: "axe", weaponAtk: 250, weaponMatk: 0, reqLevel: 38, element: "none", jobs: DATA.JOB_AXE, bonuses: {}, tier: "high" },
+    weapon_club: { id: "weapon_club", type: "weapon", name: "กระบองไม้", price: 180, weaponClass: "mace", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_MACE, bonuses: {} },
+    weapon_mace: { id: "weapon_mace", type: "weapon", name: "กระบองเหล็ก", price: 550, weaponClass: "mace", weaponAtk: 110, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_MACE, bonuses: {} },
+    weapon_holy: { id: "weapon_holy", type: "weapon", name: "กระบองศักดิ์สิทธิ์", price: 1400, weaponClass: "mace", weaponAtk: 180, weaponMatk: 0, reqLevel: 34, element: "none", jobs: DATA.JOB_MACE, bonuses: {}, tier: "high" },
 
-    shield_wood: { id: "shield_wood", type: "shield", name: "โล่ไม้", price: 80, bonuses: { hp: 30, def: 5 } },
-    shield_iron: { id: "shield_iron", type: "shield", name: "โล่เหล็ก", price: 160, bonuses: { hp: 50, statusResist: 1, def: 10 } },
-    shield_magic: { id: "shield_magic", type: "shield", name: "โล่เวทมนตร์", price: 180, bonuses: { matk: 20, dodge: 1, mdef: 10 } },
-    shield_dragon: { id: "shield_dragon", type: "shield", name: "โล่มังกรเพลิง", price: 300, bonuses: { hp: 70, statusResist: 2, def: 15 } },
+    shield_wood: { id: "shield_wood", type: "shield", name: "โล่ไม้", price: 80, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    shield_iron: { id: "shield_iron", type: "shield", name: "บัคเลอร์", price: 160, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 4 } },
+    shield_magic: { id: "shield_magic", type: "shield", name: "โล่เล็ก", price: 180, jobs: "all", defTier: "low", bonuses: { hardDef: 2 } },
+    shield_dragon: { id: "shield_dragon", type: "shield", name: "โล่เหล็ก", price: 300, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 6 } },
 
-    cloak_travel: { id: "cloak_travel", type: "cloak", name: "ผ้าคลุมเดินทาง", price: 100, bonuses: { aspeed: 0.2 } },
-    cloak_shadow: { id: "cloak_shadow", type: "cloak", name: "ผ้าคลุมเงา", price: 130, bonuses: { dodge: 2 } },
-    cloak_mage: { id: "cloak_mage", type: "cloak", name: "ผ้าคลุมนักเวท", price: 200, bonuses: { aspeed: 0.2, matk: 10 } },
-    cloak_invis: { id: "cloak_invis", type: "cloak", name: "ผ้าคลุมล่องหน", price: 260, bonuses: { dodge: 4, aspeed: 0.1 } },
+    cloak_travel: { id: "cloak_travel", type: "cloak", name: "ฮู้ดผ้า", price: 100, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    cloak_shadow: { id: "cloak_shadow", type: "cloak", name: "ผ้าคลุมผจญภัย", price: 130, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 2 } },
+    cloak_mage: { id: "cloak_mage", type: "cloak", name: "ผ้าคลุม", price: 200, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    cloak_invis: { id: "cloak_invis", type: "cloak", name: "แมนเทิล", price: 260, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 3 } },
 
-    boots_leather: { id: "boots_leather", type: "boots", name: "รองเท้าหนัง", price: 120, bonuses: { luk: 5 } },
-    boots_light: { id: "boots_light", type: "boots", name: "รองเท้าเบา", price: 150, bonuses: { agi: 5 } },
-    boots_hunt: { id: "boots_hunt", type: "boots", name: "รองเท้าล่าสัตว์", price: 200, bonuses: { aspeed: 0.3, dodge: 3 } },
-    boots_wing: { id: "boots_wing", type: "boots", name: "รองเท้าปีก", price: 300, bonuses: { aspeed: 0.5 } },
+    boots_leather: { id: "boots_leather", type: "boots", name: "รองเท้าแตะ", price: 120, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    boots_light: { id: "boots_light", type: "boots", name: "รองเท้าผ้า", price: 150, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    boots_hunt: { id: "boots_hunt", type: "boots", name: "รองเท้าหนัง", price: 200, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 2 } },
+    boots_wing: { id: "boots_wing", type: "boots", name: "รองเท้าทหาร", price: 300, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 3 } },
 
     acc_power: { id: "acc_power", type: "acc", name: "แหวนพลัง", price: 400, bonuses: { atk: 10, matk: 10 } },
     acc_magic: { id: "acc_magic", type: "acc", name: "แหวนเวทย์", price: 400, bonuses: { matk: 30 } },
@@ -1027,14 +1072,13 @@
     acc_wizard: { id: "acc_wizard", type: "acc", name: "แหวนนักเวท", price: 300, bonuses: { mp: 20, mpRegen: 1 } },
     acc_luck: { id: "acc_luck", type: "acc", name: "จี้โชคลาภ", price: 500, bonuses: { crit: 3, critMult: 10 } },
 
-    helm_abyss: { id: "helm_abyss", type: "helm", name: "มงกุฎราตรีมรณะ", price: 900, tier: "high", bonuses: { hp: 420, def: 22 } },
+    helm_abyss: { id: "helm_abyss", type: "helm", name: "เกรทเฮล์ม", price: 900, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 6 } },
     eyes_judge: { id: "eyes_judge", type: "eyes", name: "ดวงตาผู้พิพากษาอเวจี", price: 850, tier: "high", bonuses: { crit: 12, accuracy: 12 } },
     mouth_whisper: { id: "mouth_whisper", type: "mouth", name: "หน้ากากกระซิบมรณะ", price: 800, tier: "high", bonuses: { mp: 80, mpRegen: 8 } },
-    armor_ruin: { id: "armor_ruin", type: "armor", name: "เกราะราชาวิบัติ", price: 1400, tier: "high", bonuses: { hp: 2200, def: 45, statusResist: 12 } },
-    weapon_void: { id: "weapon_void", type: "weapon", name: "ดาบจักรวาลทมิฬ", price: 1500, tier: "high", bonuses: { atk: 80, matk: 80, str: 6, int: 6 } },
-    shield_eclipse: { id: "shield_eclipse", type: "shield", name: "โล่สุริยันดับ", price: 1100, tier: "high", bonuses: { hp: 250, def: 30, mdef: 30 } },
-    cloak_night: { id: "cloak_night", type: "cloak", name: "ผ้าคลุมราตรีไร้เงา", price: 1000, tier: "high", bonuses: { aspeed: 0.8, dodge: 8 } },
-    boots_gale: { id: "boots_gale", type: "boots", name: "รองเท้าลมมรณะ", price: 950, tier: "high", bonuses: { agi: 8, luk: 6, aspeed: 0.6 } },
+    armor_ruin: { id: "armor_ruin", type: "armor", name: "เกราะแผ่น", price: 1400, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 10 } },
+    shield_eclipse: { id: "shield_eclipse", type: "shield", name: "โล่ทาวเวอร์", price: 1100, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 8 } },
+    cloak_night: { id: "cloak_night", type: "cloak", name: "ผ้าคลุมทหาร", price: 1000, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
+    boots_gale: { id: "boots_gale", type: "boots", name: "รองเท้าเหล็ก", price: 950, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
     acc_triad: { id: "acc_triad", type: "acc", name: "แหวนอสูรสามภพ", price: 1300, tier: "high", bonuses: { atk: 35, matk: 35, crit: 8 } },
   };
 

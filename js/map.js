@@ -1,20 +1,21 @@
 /**
  * Multi-map walker: Prontera 80×80 walled city, 100×100 starter field, 100×100 7-boss world.
- * Camera is a 33×23 landscape window, player-centered, full screen.
+ * Camera is locked 45×33 landscape (VIEW_W/VIEW_H), fills the screen exactly.
+ * MAP.VIEW=23 is arena-only leftover; walk camera always uses VIEW_W/VIEW_H.
  * Field/boss combat is real-time on the map (WORLD).
  */
 (function (root) {
   const DATA = root.DATA;
   const MAP = {};
 
-  MAP.VIEW_W = 33;
-  MAP.VIEW_H = 23;
+  MAP.VIEW_W = 45;
+  MAP.VIEW_H = 33;
   MAP.VIEW = 23;
   MAP.WORLD = 100;
   MAP.PATH_NODE_CAP = 2400;
   MAP.PAD_STEP_MS = 140;
-  MAP.COLS = 33;
-  MAP.ROWS = 23;
+  MAP.COLS = 45;
+  MAP.ROWS = 33;
   MAP.CITY = 80;
 
   function hashXY(x, y) {
@@ -615,8 +616,129 @@
       castleSpawn: castleSpawn,
       fountain: { x: cx, y: cy },
       houseLots: { sw: swLotN, se: seLotN },
+      lotPts: { sw: swLotPts, se: seLotPts },
       npcs: { W: wShop, P: pShop, S: kafra, K: { x: cx, y: 16 }, G: { x: n - wallT, y: cy } },
     };
+  }
+
+
+
+  function cityLandmarks() {
+    if (MAP._cityMarks) return MAP._cityMarks;
+    const marks = [];
+    function add(kind, src, x, y, w, h, zoff) {
+      marks.push({ kind: kind, src: src, x: x, y: y, w: w, h: h, zoff: zoff || 0 });
+    }
+    const sw = (cityGrid.lotPts && cityGrid.lotPts.sw) || [];
+    const se = (cityGrid.lotPts && cityGrid.lotPts.se) || [];
+    sw.concat(se).forEach(function (pt) {
+      add("house", "assets/city/house.png", pt[0] + 1, pt[1] + 2, 3.4, 4.8, 0);
+      add("tree", "assets/city/tree.png", pt[0] + 2.7, pt[1] + 2.15, 1.65, 2.25, 1);
+    });
+    add("house", "assets/city/house.png", 56, 46, 3.2, 4.4, 0);
+    add("castle", "assets/city/castle.png", 40, 16, 13.5, 14.5, 0);
+    add("church", "assets/city/church.png", 57, 20, 11.5, 14.2, 0);
+    add("shop", "assets/city/shop_west.png", 18, 38, 3.2, 4.0, 0);
+    add("shop", "assets/city/shop_west.png", 24, 38, 3.2, 4.0, 0);
+    add("shop", "assets/city/shop_east.png", 56, 38, 3.2, 4.0, 0);
+    add("shop", "assets/city/shop_east.png", 62, 38, 3.2, 4.0, 0);
+    add("fountain", "assets/city/fountain.png", 40, 40, 3.6, 3.8, 2);
+    add("gate", "assets/city/gatehouse.png", 78, 40, 5.6, 6.4, 2);
+    add("tower", "assets/city/tower.png", 1, 1, 2.6, 4.4, 4);
+    add("tower", "assets/city/tower.png", 78, 1, 2.6, 4.4, 4);
+    add("tower", "assets/city/tower.png", 1, 78, 2.6, 4.4, 4);
+    add("tower", "assets/city/tower.png", 78, 78, 2.6, 4.4, 4);
+    function wallLine(x0, y0, x1, y1, step) {
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const len = Math.max(Math.abs(dx), Math.abs(dy));
+      const n = Math.max(1, Math.round(len / step));
+      for (let i = 0; i <= n; i++) {
+        const t = n === 0 ? 0 : i / n;
+        const x = x0 + dx * t;
+        const y = y0 + dy * t;
+        if (x > 74 && y > 35 && y < 45) continue;
+        if ((x < 4 && y < 4) || (x > 75 && y < 4) || (x < 4 && y > 75) || (x > 75 && y > 75)) continue;
+        add("wall", "assets/city/wall.png", x, y, 2.3, 2.1, -2);
+      }
+    }
+    wallLine(5, 1, 74, 1, 2.2);
+    wallLine(5, 78.6, 74, 78.6, 2.2);
+    wallLine(1, 5, 1, 74, 2.2);
+    wallLine(78.6, 5, 78.6, 74, 2.2);
+    (cityGrid.decor || []).forEach(function (d) {
+      if (d.kind === "tree") add("tree", "assets/city/tree.png", d.x, d.y, 1.8, 2.4, 1);
+    });
+    marks.sort(function (a, b) {
+      return a.y - b.y || (a.zoff || 0) - (b.zoff || 0);
+    });
+    MAP._cityMarks = marks;
+    return marks;
+  }
+
+  const CITY_OVER_LABS = [
+    { x: 40, y: 16, text: "ปราสาทโลหิต" },
+    { x: 78, y: 40, text: "ป่าสงบ" },
+  ];
+
+  function paintCityOverlay() {
+    if (!hostEl) return;
+    const grid = hostEl.querySelector(".map-grid");
+    if (!grid) return;
+    let layer = grid.querySelector(".city-layer");
+    if (zoneId !== "city") {
+      if (layer) layer.parentNode.removeChild(layer);
+      return;
+    }
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "city-layer";
+      grid.appendChild(layer);
+    }
+    const cam = MAP.camera();
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
+    const html = [];
+    cityLandmarks().forEach(function (m) {
+      const sx = m.x - cam.x;
+      const sy = m.y - cam.y;
+      if (sx < -m.w - 1 || sy < -m.h - 1 || sx > vw + 2 || sy > vh + 2) return;
+      const z = 20 + ((m.y * 2) | 0) + (m.zoff || 0);
+      html.push(
+        '<div class="city-prop kind-' +
+          m.kind +
+          '" style="left:' +
+          ((sx * 100) / vw).toFixed(3) +
+          "%;top:" +
+          ((sy * 100) / vh).toFixed(3) +
+          "%;--prop-w:" +
+          m.w +
+          ";--prop-h:" +
+          m.h +
+          ";z-index:" +
+          z +
+          '"><img src="' +
+          m.src +
+          '" alt=""></div>'
+      );
+    });
+    CITY_OVER_LABS.forEach(function (lab) {
+      const sx = lab.x - cam.x;
+      const sy = lab.y - cam.y;
+      if (sx < -1 || sy < -1 || sx > vw || sy > vh) return;
+      html.push(
+        '<div class="city-lab" style="left:' +
+          ((sx * 100) / vw).toFixed(3) +
+          "%;top:" +
+          ((sy * 100) / vh).toFixed(3) +
+          "%;z-index:" +
+          (90 + ((lab.y * 2) | 0)) +
+          '">' +
+          lab.text +
+          "</div>"
+      );
+    });
+    layer.innerHTML = html.join("");
   }
 
 
@@ -1242,6 +1364,7 @@
     if (avatar) {
       avatar.style.left = (sp.x * 100) / vw + "%";
       avatar.style.top = (sp.y * 100) / vh + "%";
+      avatar.style.zIndex = String(20 + ((p.y * 2) | 0) + 3);
       const hid = (saveRef && saveRef.heroId) || "warrior";
       const face = (saveRef && saveRef.facing) || MAP.facing || "s";
       const img = avatar.querySelector("img.map-sprite");
@@ -1314,7 +1437,6 @@
       if (ch === "S") return '<span class="map-boss-lab">คาฟร้า</span>';
       if (ch === "K") return x === 40 && y === 16 ? '<span class="map-boss-lab">ปราสาทโลหิต</span>' : "";
       if (ch === "G") return x === 78 && y === 40 ? '<span class="map-boss-lab">ป่าสงบ</span>' : "";
-      if (ch === "T" || ch === "#") return tileArt("assets/tiles/tree.png", "tree");
       if (ch === "B" || (walk && flowerAt(x, y))) return tileArt("assets/tiles/flowers.png", "flower");
       return "";
     }
@@ -1382,6 +1504,7 @@
       return true;
     }
     lastCam = { x: cam.x, y: cam.y };
+    paintCityOverlay();
     let i = 0;
     for (let sy = 0; sy < vh; sy++) {
       for (let sx = 0; sx < vw; sx++) {
@@ -1441,6 +1564,7 @@
       '" alt="">' +
       "</div></div>";
     paintPlayer();
+    paintCityOverlay();
     const av = el.querySelector(".map-avatar");
     if (av && root.FX && FX.applyFacing) FX.applyFacing(av, (saveRef && saveRef.facing) || "s");
   };

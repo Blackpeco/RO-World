@@ -758,8 +758,8 @@
       el.classList.toggle("targeted", S.targetId === e.id);
       el.classList.toggle("boss", e.kind === "boss");
       el.classList.toggle("dying", !!e.dead);
-      const vw = (MAP && MAP.VIEW_W) || 33;
-      const vh = (MAP && MAP.VIEW_H) || 23;
+      const vw = (MAP && MAP.VIEW_W) || 45;
+      const vh = (MAP && MAP.VIEW_H) || 33;
       let sx = e.x;
       let sy = e.y;
       if (MAP && MAP.worldToScreen && S.mode !== "arena") {

@@ -78,6 +78,16 @@
       const hero = DATA.HEROES[save.heroId];
       save.charName = (hero && hero.name) || "";
     }
+    if (save.equip) {
+      DATA.SLOTS.forEach(function (slot) {
+        const id = save.equip[slot.id];
+        if (!id) return;
+        const item = DATA.ITEMS[id];
+        if (!item || !DATA.canJobWear(save.heroId, item)) {
+          save.equip[slot.id] = null;
+        }
+      });
+    }
     save.level = save.baseLevel;
     return save;
   };
@@ -479,6 +489,12 @@
     return { ok: true };
   };
 
+  PVE.canEquipItem = function (save, itemId) {
+    const item = DATA.ITEMS[itemId];
+    if (!item) return false;
+    return DATA.canJobWear(save.heroId, item);
+  };
+
   PVE.equipItem = function (save, slotId, itemId) {
     const slot = DATA.SLOTS.find(function (s) {
       return s.id === slotId;
@@ -491,6 +507,7 @@
     const item = DATA.ITEMS[itemId];
     if (!item || item.type !== slot.type) return { ok: false, reason: "ชนิดไม่ตรงช่อง" };
     if (!save.owned[itemId]) return { ok: false, reason: "ยังไม่ได้ซื้อ" };
+    if (!PVE.canEquipItem(save, itemId)) return { ok: false, reason: "อาชีพนี้ใส่ไม่ได้" };
     save.equip[slotId] = itemId;
     PVE.syncVitals(save);
     return { ok: true };

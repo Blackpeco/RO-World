@@ -38,7 +38,14 @@
     return pts;
   };
 
-  STATS.equipmentFlatBonuses = function (equip) {
+  STATS.weaponPower = function (equip) {
+    const id = equip && equip.weapon;
+    const w = id && DATA.ITEMS[id];
+    if (!w || w.type !== "weapon") return { weaponAtk: 0, weaponMatk: 0 };
+    return { weaponAtk: Number(w.weaponAtk) || 0, weaponMatk: Number(w.weaponMatk) || 0 };
+  };
+
+    STATS.equipmentFlatBonuses = function (equip) {
     const b = {
       hp: 0,
       mp: 0,
@@ -313,6 +320,7 @@
 
     const fromPts = STATS.statPointBonuses(totalPts);
     const fromEq = STATS.equipmentFlatBonuses(equip);
+    const fromWp = STATS.weaponPower(equip);
     const fromLv = STATS.levelBonuses(level);
     const fromRf = STATS.refineBonuses(equip, refine);
 
@@ -339,8 +347,8 @@
       totalPts: totalPts,
       maxHp: base.hp + fromPts.hp + fromEq.hp + fromLv.hp,
       maxMp: base.mp + fromPts.mp + fromEq.mp + fromLv.mp,
-      atk: base.atk + fromPts.atk + fromEq.atk + fromLv.atk + fromRf.atk,
-      matk: base.matk + fromPts.matk + fromEq.matk + fromLv.matk + fromRf.matk,
+      atk: base.atk + fromPts.atk + fromEq.atk + fromLv.atk + fromRf.atk + fromWp.weaponAtk,
+      matk: base.matk + fromPts.matk + fromEq.matk + fromLv.matk + fromRf.matk + fromWp.weaponMatk,
       def: base.def + fromPts.def + fromEq.def + fromLv.def,
       mdef: base.mdef + fromPts.mdef + fromEq.mdef + fromLv.mdef,
       aspeed: aspeed > 0 ? aspeed : aspdInfo.finalAspd,
@@ -363,7 +371,7 @@
     stats.softDef = STATS.totalSoft(STATS.playerSoftDef(totalPts.vit || 0, totalPts.agi || 0, level), 0, 0);
     stats.softMdef = stats.mdef;
     stats.hardDef = fromRf.hardDef + (fromEq.hardDef || 0);
-    stats.hardMdef = fromRf.hardMdef;
+    stats.hardMdef = fromRf.hardMdef + (fromEq.hardDef || 0) + (fromEq.hardMdef || 0);
     stats.aspd = aspdInfo.aspd;
     stats.finalAspd = aspdInfo.finalAspd;
     stats.equipAspdMod = eqAspd.equipAspdMod;

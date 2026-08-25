@@ -426,7 +426,35 @@
     }
   };
 
-  App.mapIsLive = function () {
+  App.cityHotkeyNext = function (kind, cur) {
+    if (kind === "shop") {
+      if (cur === "shop") return "potions";
+      if (cur === "potions") return "close";
+      return "shop";
+    }
+    if (cur === kind) return "close";
+    return kind;
+  };
+
+  App.toggleCityWin = function (kind) {
+    if (!App.save || App.screen === "arena") return;
+    if (typeof WORLD !== "undefined" && WORLD.mode && WORLD.mode() === "arena") return;
+    const cur = App.cityWinOpen() ? UI._cityWinKind : null;
+    const next = App.cityHotkeyNext(kind, cur);
+    if (next === "close") {
+      App.closeCityWin();
+      return;
+    }
+    if (cur && cur !== next) App.closeCityWin();
+    if (next === "equip") App.goEquip();
+    else if (next === "shop") App.goShop();
+    else if (next === "potions") App.goPotionShop();
+    else if (next === "status") App.goCityStatus();
+    else if (next === "skills") App.goCitySkills();
+    else if (next === "refine") App.goRefine();
+  };
+
+    App.mapIsLive = function () {
     return App.screen === "map" && typeof document !== "undefined" && !!document.getElementById("world-map");
   };
 
@@ -1404,11 +1432,14 @@
         App.toggleAutoFarm();
       }
       if (App.screen === "map" && App.save) {
-        const hk = ev.key;
-        if (hk === "e" || hk === "E") { ev.preventDefault(); App.toggleCityWin("equip"); return; }
-        if (hk === "r" || hk === "R") { ev.preventDefault(); App.toggleCityWin("shop"); return; }
-        if (hk === "c" || hk === "C") { ev.preventDefault(); App.toggleCityWin("status"); return; }
-        if (hk === "k" || hk === "K") { ev.preventDefault(); App.toggleCityWin("skills"); return; }
+        const arenaOn = typeof WORLD !== "undefined" && WORLD.mode && WORLD.mode() === "arena";
+        if (!arenaOn) {
+          const hk = ev.key;
+          if (hk === "e" || hk === "E") { ev.preventDefault(); App.toggleCityWin("equip"); return; }
+          if (hk === "r" || hk === "R") { ev.preventDefault(); App.toggleCityWin("shop"); return; }
+          if (hk === "c" || hk === "C") { ev.preventDefault(); App.toggleCityWin("status"); return; }
+          if (hk === "k" || hk === "K") { ev.preventDefault(); App.toggleCityWin("skills"); return; }
+        }
       }
       if (typeof WORLD !== "undefined" && WORLD.live && WORLD.live()) {
         if (ev.key >= "1" && ev.key <= "6") {

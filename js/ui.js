@@ -26,6 +26,10 @@
       .replace(/"/g, "&quot;");
   };
 
+  UI.jobsText = function (item) {
+    return DATA.jobsText(item);
+  };
+
   UI.bonusText = function (b) {
     if (!b) return "";
     const parts = [];
@@ -474,7 +478,7 @@
               "</b>" +
               tier +
               "<div class=\"item-bon\">" +
-              UI.bonusText(it.bonuses) +
+              (DATA.itemStatLine ? DATA.itemStatLine(it) : (UI.bonusText(it.bonuses) + " · " + UI.jobsText(it))) +
               '</div></div><div class="item-buy">' +
               btn +
               "</div></div>"
@@ -547,12 +551,15 @@
             ? '<span class="inv-badge on">ใส่อยู่' + (wornSlots.length > 1 ? " ×" + wornSlots.length : "") + "</span>"
             : '<span class="inv-badge off">ในคลัง</span>';
           const slotName = (DATA.SLOTS.find(function (s) { return s.type === it.type; }) || {}).name || it.type;
+          const canWear = DATA.canJobWear(save.heroId, it);
+          const blocked = !canWear && !worn;
           return (
             '<button type="button" class="inv-card' +
             (worn ? " equipped" : "") +
-            '" onclick="App.toggleInvItem(\'' +
-            it.id +
-            "')\">" +
+            (blocked ? " blocked" : "") +
+            '" ' +
+            (blocked ? "disabled" : 'onclick="App.toggleInvItem(\'' + it.id + '\')"') +
+            ">" +
             badge +
             "<b>" +
             UI.esc(it.name) +
@@ -562,7 +569,7 @@
             UI.esc(slotName) +
             "</small>" +
             '<div class="item-bon">' +
-            UI.bonusText(it.bonuses) +
+            (DATA.itemStatLine ? DATA.itemStatLine(it) : (UI.bonusText(it.bonuses) + " · " + UI.jobsText(it))) +
             "</div></button>"
           );
         }).join("")

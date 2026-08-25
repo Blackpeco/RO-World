@@ -199,7 +199,8 @@
   FX.mapFloater = function (host, x, y, cols, rows, text, kind) {
     if (!host) return;
     const grid = host.querySelector(".map-grid") || host;
-    const view = (root.MAP && MAP.VIEW) || cols || 23;
+    const vw = (root.MAP && MAP.VIEW_W) || cols || 33;
+    const vh = (root.MAP && MAP.VIEW_H) || rows || 23;
     let sx = x;
     let sy = y;
     if (root.MAP && MAP.worldToScreen) {
@@ -207,13 +208,13 @@
       sx = sp.x;
       sy = sp.y;
     }
-    if (sx < -1 || sy < -1 || sx > view || sy > view) return;
+    if (sx < -1 || sy < -1 || sx > vw || sy > vh) return;
     const n = document.createElement("div");
     n.className = "floater map-floater " + (kind || "dmg");
     n.textContent = text;
     const jitter = (Math.random() * 10 - 5).toFixed(1);
-    n.style.left = "calc(" + ((sx + 0.5) * 100 / view).toFixed(2) + "% + " + jitter + "px)";
-    n.style.top = ((sy + 0.25) * 100 / view).toFixed(2) + "%";
+    n.style.left = "calc(" + ((sx + 0.5) * 100 / vw).toFixed(2) + "% + " + jitter + "px)";
+    n.style.top = ((sy + 0.25) * 100 / vh).toFixed(2) + "%";
     if (kind === "crit") {
       const burst = document.createElement("span");
       burst.className = "crit-burst";
@@ -316,10 +317,10 @@
       return { x: r.left - gr.left + r.width / 2, y: r.top - gr.top + r.height * 0.38 };
     }
     const cam = (root.MAP && MAP.camera) ? MAP.camera() : { x: 0, y: 0 };
-    const view = (root.MAP && MAP.VIEW) || 23;
+    const vw = (root.MAP && MAP.VIEW_W) || 33;
     const cs = (typeof getComputedStyle === "function") ? getComputedStyle(grid) : null;
     const cssTile = cs && parseFloat(cs.getPropertyValue("--tile"));
-    const size = (cssTile && cssTile > 1) ? cssTile : (grid.clientWidth || 1) / view;
+    const size = (cssTile && cssTile > 1) ? cssTile : (grid.clientWidth || 1) / vw;
     return { x: (x - cam.x + 0.5) * size, y: (y - cam.y + 0.38) * size };
   }
 
@@ -330,7 +331,7 @@
     const b = tileCenter(grid, defn.x, defn.y);
     let dx = b.x - a.x;
     let dy = b.y - a.y;
-    const tileGuess = (grid.clientWidth || 1) / ((root.MAP && MAP.VIEW) || 23);
+    const tileGuess = (grid.clientWidth || 1) / ((root.MAP && MAP.VIEW_W) || 33);
     if (kind === "slash") {
       const len = Math.hypot(dx, dy) || 1;
       const cap = tileGuess * 0.92;

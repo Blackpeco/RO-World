@@ -585,6 +585,12 @@ textarea {
 }
 .inv-card:hover { border-color: var(--gold); }
 .inv-card.equipped { border-color: var(--ok); box-shadow: 0 0 12px rgba(61,139,74,0.16); }
+.inv-card.blocked, .inv-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.25);
+}
+.inv-card.blocked:hover, .inv-card:disabled:hover { border-color: var(--line); }
 .inv-card b { display: block; color: var(--gold2); margin: 0.15rem 0 0.1rem; }
 .inv-slot { color: var(--muted); }
 .inv-badge {
@@ -982,8 +988,13 @@ textarea {
   background-repeat: no-repeat, repeat;
 }
 .map-grid.theme-city .map-tile.fountain {
-  background: radial-gradient(circle at 50% 42%, #9ee0f2 0%, #5eb4d4 70%, #4aa0c4 100%);
-  animation: fountainRipple 2.4s ease-in-out infinite;
+  background-color: #f6e6d0;
+  background-image:
+    linear-gradient(180deg, rgba(248, 236, 216, 0.35), rgba(246, 230, 208, 0.2)),
+    url("../assets/tiles/city_plaza.png");
+  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
+  background-repeat: no-repeat, repeat;
+  animation: none;
 }
 .map-grid.theme-city .map-tile.fountain-rim {
   background-color: #efe0cc;
@@ -997,87 +1008,34 @@ textarea {
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(1.18); }
 }
-.map-grid.theme-city .map-tile.house {
-  background-color: #f8dcc8;
-  background-image:
-    linear-gradient(90deg,
-      transparent 17%, rgba(92, 62, 46, 0.16) 17%, rgba(92, 62, 46, 0.16) 20%, transparent 20%,
-      transparent 49%, rgba(80, 54, 40, 0.11) 49%, rgba(80, 54, 40, 0.11) 51.5%, transparent 51.5%,
-      transparent 78%, rgba(92, 62, 46, 0.14) 78%, rgba(92, 62, 46, 0.14) 81%, transparent 81%),
-    linear-gradient(180deg, #f8dcc8 0%, #ecc4ac 100%);
-  box-shadow: inset 0 -5px 0 rgba(196, 148, 118, 0.22);
-}
-.map-grid.theme-city .map-tile.house::before {
-  content: "";
-  position: absolute;
-  left: 36%;
-  right: 36%;
-  top: 40%;
-  height: 26%;
-  background: linear-gradient(180deg, rgba(90, 110, 130, 0.22), rgba(50, 64, 82, 0.18));
-  border-radius: 2px;
-  pointer-events: none;
-}
-.map-grid.theme-city .map-tile.house-alt {
-  background-image:
-    linear-gradient(90deg,
-      transparent 22%, rgba(88, 58, 44, 0.15) 22%, rgba(88, 58, 44, 0.15) 25%, transparent 25%,
-      transparent 64%, rgba(80, 54, 40, 0.11) 64%, rgba(80, 54, 40, 0.11) 66.5%, transparent 66.5%),
-    linear-gradient(180deg, #f4d0bc 0%, #e8b49c 100%);
-}
+.map-grid.theme-city .map-tile.house,
+.map-grid.theme-city .map-tile.house-alt,
 .map-grid.theme-city .map-tile.roof,
-.map-grid.theme-city .map-tile.church-roof {
-  background-color: #e87858;
+.map-grid.theme-city .map-tile.roof-alt,
+.map-grid.theme-city .map-tile.church,
+.map-grid.theme-city .map-tile.church-roof,
+.map-grid.theme-city .map-tile.keep,
+.map-grid.theme-city .map-tile.tree {
+  background-color: #6aa646;
   background-image:
-    repeating-linear-gradient(180deg,
-      #f09070 0 22%,
-      #e87858 22% 26%,
-      #ee8464 26% 48%,
-      #e07050 48% 52%,
-      #e87858 52% 74%,
-      #dc6c4c 74% 78%,
-      #e87858 78% 100%);
+    radial-gradient(circle at 30% 30%, rgba(180, 230, 120, 0.22), transparent 50%),
+    url("../assets/tiles/grass.png");
+  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
+  background-repeat: no-repeat, repeat;
+  box-shadow: none;
 }
-.map-grid.theme-city .map-tile.roof-alt {
-  background-color: #f09070;
-  background-image:
-    repeating-linear-gradient(180deg,
-      #f6a080 0 24%,
-      #f09070 24% 28%,
-      #ee8868 28% 50%,
-      #e87858 50% 54%,
-      #f09070 54% 76%,
-      #e88060 76% 80%,
-      #f09070 80% 100%);
-}
-.map-grid.theme-city .map-tile.church {
-  background-color: #fff4e4;
-  background-image:
-    linear-gradient(90deg, transparent 44%, rgba(210, 186, 150, 0.16) 44%, rgba(210, 186, 150, 0.16) 56%, transparent 56%),
-    linear-gradient(180deg, #fffaf0 0%, #fff4e4 42%, #f4e6d0 100%);
-  box-shadow: inset 0 -5px 0 rgba(200, 176, 140, 0.22);
-}
-.map-grid.theme-city .map-tile.church::after {
-  content: "";
-  position: absolute;
-  left: 28%;
-  right: 28%;
-  top: 0;
-  height: 34%;
-  background: linear-gradient(180deg, #fffaf2, #f2e4cc);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  opacity: 0.55;
-  pointer-events: none;
+.map-grid.theme-city .map-tile.house::before,
+.map-grid.theme-city .map-tile.church::after,
+.map-grid.theme-city .map-tile.tree::before,
+.map-grid.theme-city .map-tile.tree::after {
+  content: none;
 }
 .map-grid.theme-city .map-tile.battlement {
   background:
     linear-gradient(90deg, transparent 8%, rgba(40, 36, 30, 0.18) 8% 12%, transparent 12% 88%, rgba(40, 36, 30, 0.18) 88% 92%, transparent 92%),
     linear-gradient(180deg, #c4beb2 0 22%, #9a9488 22% 58%, #6e685c 100%);
 }
-.map-grid.theme-city .map-tile.keep {
-  background: linear-gradient(180deg, #d09090 0%, #b06870 100%);
-  box-shadow: inset 0 -5px 0 rgba(140, 72, 80, 0.2);
-}
+/* keep/house/church color blocks are grass fallbacks above */
 .map-grid.theme-city .map-tile.park {
   background-color: #6aa646;
   background-image:
@@ -1086,29 +1044,7 @@ textarea {
   background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
   background-repeat: no-repeat, repeat;
 }
-.map-grid.theme-city .map-tile.tree {
-  background: linear-gradient(180deg, #7ed45a, #5eb046);
-}
-.map-grid.theme-city .map-tile.tree::before {
-  content: "";
-  position: absolute;
-  left: 28%;
-  right: 28%;
-  bottom: 8%;
-  height: 28%;
-  background: #6a3e22;
-  border-radius: 1px;
-}
-.map-grid.theme-city .map-tile.tree::after {
-  content: "";
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  top: 6%;
-  height: 62%;
-  background: radial-gradient(circle at 40% 40%, #7ed45a, #4aaa38 70%);
-  border-radius: 50%;
-}
+/* tree tiles use park grass; canopy is the overlay sprite */
 .map-grid.theme-city .map-tile.block:not(.house):not(.roof):not(.church):not(.church-roof):not(.battlement):not(.keep):not(.tree):not(.fountain):not(.fountain-rim) {
   background: linear-gradient(180deg, #b8b2a6, #8a8478);
 }
@@ -1166,57 +1102,82 @@ textarea {
 .map-grid.theme-city .map-tile.npc {
   box-shadow: 0 0 10px rgba(255, 210, 140, 0.45);
 }
-.map-grid.theme-city .map-tile.shop-weapon {
-  background:
-    linear-gradient(180deg, #e87880 0 28%, transparent 28%),
-    linear-gradient(180deg, #f8e8d4, #f0d8c0);
-}
-.map-grid.theme-city .map-tile.shop-potion {
-  background:
-    linear-gradient(180deg, #6cbc88 0 28%, transparent 28%),
-    linear-gradient(180deg, #f4eee0, #e8dcc8);
+.map-grid.theme-city .map-tile.shop-weapon,
+.map-grid.theme-city .map-tile.shop-potion,
+.map-grid.theme-city .map-tile.keep-gate,
+.map-grid.theme-city .map-tile.gate {
+  background-color: #c4b49a;
+  background-image:
+    linear-gradient(180deg, rgba(216, 200, 176, 0.4), rgba(196, 180, 154, 0.25)),
+    url("../assets/tiles/city_ground.png");
+  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
+  background-repeat: no-repeat, repeat;
 }
 .map-grid.theme-city .map-tile.shop-kafra {
-  background:
-    linear-gradient(180deg, #6aaee0 0 28%, transparent 28%),
-    linear-gradient(180deg, #f4eee4, #e8dcc8);
+  background-color: #f6e6d0;
+  background-image:
+    linear-gradient(180deg, rgba(248, 236, 216, 0.35), rgba(246, 230, 208, 0.2)),
+    url("../assets/tiles/city_plaza.png");
+  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
+  background-repeat: no-repeat, repeat;
 }
-.map-grid.theme-city .map-tile.keep-gate {
-  background:
-    linear-gradient(180deg, #d8a0a0 0 16%, #4a2024 16% 80%, #a06068 80%);
-  box-shadow: 0 0 12px rgba(240, 200, 120, 0.5);
-}
-.map-grid.theme-city .map-tile.keep-gate::before {
-  content: "";
-  position: absolute;
-  left: 18%;
-  right: 18%;
-  top: 10%;
-  height: 72%;
-  background: radial-gradient(ellipse at 50% 110%, #2a1014 0 55%, transparent 58%);
-  pointer-events: none;
-}
-.map-grid.theme-city .map-tile.gate {
-  background:
-    linear-gradient(180deg, #c8c0b0 0%, #8a8276 14%, #3a322c 20%, #241e1a 78%, #6a6258 88%, #9a9286 100%);
-  box-shadow: 0 0 10px rgba(160, 200, 120, 0.32);
-}
+.map-grid.theme-city .map-tile.keep-gate::before,
 .map-grid.theme-city .map-tile.gate::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 18%;
-  background: linear-gradient(180deg, #b8b2a6, #8a8478);
-  pointer-events: none;
+  content: none;
 }
 .map-grid.theme-city .map-tile.shop .map-boss-lab,
 .map-grid.theme-city .map-tile.keep-gate .map-boss-lab,
 .map-grid.theme-city .map-tile.gate .map-boss-lab {
   bottom: 3%;
-  font-size: 0.5rem;
+  font-size: 0.42rem;
   font-weight: 700;
+  z-index: 2;
+}
+
+
+.city-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.city-prop {
+  position: absolute;
+  width: calc(100% / var(--cols, 45));
+  height: calc(100% / var(--rows, 33));
+  overflow: visible;
+  pointer-events: none;
+}
+.city-prop img {
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  transform: translateX(-50%);
+  width: calc(var(--prop-w, 3) * 100%);
+  height: calc(var(--prop-h, 4) * 100%);
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  filter: drop-shadow(3px 5px 7px rgba(40, 28, 16, 0.32));
+}
+.city-lab {
+  position: absolute;
+  width: calc(100% / var(--cols, 45));
+  height: calc(100% / var(--rows, 33));
+  pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  font-size: 0.42rem;
+  font-weight: 700;
+  color: #fff6d2;
+  text-shadow: 0 1px 2px #000;
+  line-height: 1.1;
+  text-align: center;
+  padding-bottom: 2%;
+}
+.map-grid.theme-city {
+  overflow: visible;
 }
 
 .world-map.field, .map-grid.theme-field {
@@ -1479,7 +1440,7 @@ textarea {
   .rt-bar { justify-content: flex-start; }
 }
 
-/* ---- fullscreen 33×23 landscape camera + overlay HUD ---- */
+/* ---- fullscreen 45×33 camera: grid fills the viewport exactly ---- */
 body.walking { overflow: hidden; }
 body.walking #title-bar { display: none; }
 body.walking #screen {
@@ -1504,33 +1465,35 @@ body.walking #screen {
 
 .map-fs .map-grid,
 .world-map.fs .map-grid {
-  --view-w: 33;
-  --view-h: 23;
-  --view: 33;
-  --tile: min(calc(100vw / 33), calc(100vh / 23));
+  --view-w: 45;
+  --view-h: 33;
+  --view: 45;
+  --tile-w: calc(100vw / 45);
+  --tile-h: calc(100vh / 33);
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(var(--tile) * 33);
-  height: calc(var(--tile) * 23);
+  inset: 0;
+  left: 0;
+  top: 0;
+  transform: none;
+  width: 100vw;
+  height: 100vh;
   display: grid;
-  grid-template-columns: repeat(33, var(--tile));
-  grid-template-rows: repeat(23, var(--tile));
+  grid-template-columns: repeat(45, var(--tile-w));
+  grid-template-rows: repeat(33, var(--tile-h));
   aspect-ratio: auto;
 }
 .map-fs .map-tile,
 .world-map.fs .map-tile {
-  width: var(--tile);
-  height: var(--tile);
+  width: var(--tile-w);
+  height: var(--tile-h);
   min-height: 0;
 }
 
 /* 2.5D sprites: feet on tile, overflow upward */
 .map-avatar,
 .map-ent {
-  width: calc(100% / var(--cols, 33));
-  height: calc(100% / var(--rows, 23));
+  width: calc(100% / var(--cols, 45));
+  height: calc(100% / var(--rows, 33));
   overflow: visible;
 }
 .map-avatar img,

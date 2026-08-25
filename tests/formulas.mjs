@@ -125,11 +125,11 @@ console.log("STR / VIT / INT special bonuses");
 console.log("equipment raw stat points flow through formulas");
 {
   const equip = DATA.emptyEquip();
-  equip.armor = "armor_rough"; // +3 VIT
+  equip.weapon = "weapon_short"; // Weapon ATK 70, no STR
   const st = STATS.computeHeroStats("warrior", DATA.emptyAllocated(), equip, 1);
-  assert(st.totalPts.vit === 3, "equip +3 VIT in totalPts");
-  assert(st.maxHp === 3000 + 150, "warrior +3 VIT => +150 HP, got " + st.maxHp);
-  assert(st.def === 30 + 3, "warrior +3 VIT => +3 DEF, got " + st.def);
+  assert(st.totalPts.str === 0, "weapon no longer grants STR");
+  assert(st.maxHp === 3000, "warrior no extra HP from weapon, got " + st.maxHp);
+  assert(st.atk === 160 + 70, "warrior +70 Weapon ATK => 230, got " + st.atk);
 }
 
 console.log("skill damage vs dummy (no crit, no weaken)");
@@ -312,7 +312,7 @@ console.log("high-tier shop items");
 
 console.log("world map connectivity");
 {
-  assert(MAP.VIEW_W === 33 && MAP.VIEW_H === 23, "camera 33x23");
+  assert(MAP.VIEW_W === 45 && MAP.VIEW_H === 33, "camera 45x33");
   assert(MAP.ZONES.bosses.grid.cols === 100 && MAP.ZONES.bosses.grid.rows === 100, "boss world 100x100");
   assert(MAP.bossList.length === 7, "7 boss markers");
   assert(MAP.isWalkable(MAP.SPAWN.x, MAP.SPAWN.y), "spawn walkable");
@@ -610,7 +610,7 @@ console.log("hard / soft DEF from refine");
   const b = STATS.refineBonuses(equip, refine);
   assert(almost(b.hardDef, 35) && almost(b.hardMdef, 35), "5 wearables +10 → hard 35, got " + b.hardDef + "/" + b.hardMdef);
   const st = STATS.computeHeroStats("warrior", DATA.emptyAllocated(), equip, 1, refine);
-  assert(almost(st.hardDef, 35) && almost(st.hardMdef, 35), "computeHeroStats hard 35");
+  assert(almost(st.hardDef, 46) && almost(st.hardMdef, 46), "computeHeroStats hard 46");
   assert(st.softDef === STATS.playerSoftDef(0, 0, 1), "lv1 empty soft = player formula, got " + st.softDef);
   assert(st.aspd != null && st.finalAspd != null, "hero exposes aspd score + finalAspd");
 }
@@ -1009,6 +1009,102 @@ console.log("audio helper");
   assert(mob === "mob_poring_attack", "poring land plays mob attack");
   const poison = AUDIO.onHitFx({ kind: "dmg", amount: 5, poison: true }, { attacker: "mob", monsterId: "poporing" });
   assert(poison === false, "poison tick silent");
+}
+
+console.log("wearable Hard DEF + job gates");
+{
+  const helm = DATA.ITEMS.helm_leather;
+  assert(helm.bonuses.hardDef === 1, "helm_leather hardDef 1");
+  assert(Object.keys(helm.bonuses).length === 1 && helm.bonuses.hardDef === 1, "helm_leather bonuses only hardDef");
+  assert(helm.jobs === "all" && helm.defTier === "low", "helm_leather jobs all / low");
+  assert(DATA.canJobWear("warrior", helm) && DATA.canJobWear("assassin", helm) && DATA.canJobWear("hunter", helm), "all heroes wear helm_leather");
+
+  const chain = DATA.ITEMS.armor_chain;
+  assert(chain.bonuses.hardDef === 5, "armor_chain hardDef 5");
+  assert(!DATA.canJobWear("warrior", chain), "warrior cannot wear armor_chain");
+  assert(DATA.canJobWear("assassin", chain) && DATA.canJobWear("hunter", chain), "assassin/hunter wear armor_chain");
+
+  const knight = DATA.ITEMS.armor_knight;
+  assert(knight.bonuses.hardDef === 8, "armor_knight hardDef 8");
+  assert(!DATA.canJobWear("hunter", knight), "hunter cannot wear armor_knight");
+  assert(DATA.canJobWear("warrior", knight) && DATA.canJobWear("assassin", knight), "warrior/assassin wear armor_knight");
+
+  ["armor_robe", "helm_leather", "shield_wood"].forEach(function (id) {
+    const it = DATA.ITEMS[id];
+    const keys = Object.keys(it.bonuses);
+    assert(keys.length === 1 && keys[0] === "hardDef", id + " has no extra bonus keys besides hardDef");
+  });
+
+  const w = PVE.createSave("warrior", DATA.emptyAllocated());
+  w.owned.armor_chain = true;
+  const deny = PVE.equipItem(w, "armor", "armor_chain");
+  assert(!deny.ok && deny.reason === "อาชีพนี้ใส่ไม่ได้", "warrior + armor_chain not ok");
+
+  w.owned.armor_knight = true;
+  const allow = PVE.equipItem(w, "armor", "armor_knight");
+  assert(allow.ok && w.equip.armor === "armor_knight", "warrior + armor_knight ok after owned");
+
+  const h = PVE.createSave("hunter", DATA.emptyAllocated());
+  h.owned.armor_knight = true;
+  h.equip.armor = "armor_knight";
+  PVE.ensureProgress(h);
+  assert(h.equip.armor == null, "ensureProgress strips hunter wearing armor_knight");
+
+  assert(DATA.heroJob("warrior") === "swordsman" && DATA.heroJob("assassin") === "thief" && DATA.heroJob("hunter") === "archer", "hero job map");
+  assert(DATA.jobsText(helm) === "ทุกอาชีพ", "jobsText all");
+  assert(DATA.jobsText(chain) === "Thief / Archer / Acolyte", "jobsText mid");
+  assert(DATA.jobsText(knight) === "Swordsman / Thief / Merchant", "jobsText heavy");
+}
+
+console.log("ui lock camera + name + hotkeys");
+{
+  assert(MAP.VIEW_W === 45 && MAP.VIEW_H === 33, "walk camera 45x33, got " + MAP.VIEW_W + "x" + MAP.VIEW_H);
+  assert(PVE.CHAR_NAME_MAX === 24, "CHAR_NAME_MAX 24, got " + PVE.CHAR_NAME_MAX);
+  assert(PVE.validateCharName("ก").ok === true, "1 Thai grapheme ok");
+  const thai24 = "กขคงจฉชซฌญฎฏฐฑฒณดตถทนบปผ";
+  assert(PVE.countNameChars(thai24) === 24, "24 Thai graphemes counted");
+  assert(PVE.validateCharName(thai24).ok === true, "24 Thai graphemes accepted");
+  assert(PVE.validateCharName(thai24 + "ร").ok === false, "25 Thai graphemes rejected");
+}
+
+console.log("weapon catalog v1");
+{
+  const ids = ["weapon_short","weapon_long","weapon_void","weapon_knife","weapon_dirk","weapon_shadow","weapon_bow","weapon_oakbow","weapon_hawk","weapon_staff","weapon_arch","weapon_sage","weapon_hatchet","weapon_battleaxe","weapon_waraxe","weapon_club","weapon_mace","weapon_holy"];
+  ids.forEach(function (id) {
+    const it = DATA.ITEMS[id];
+    assert(!!it, id + " exists");
+    assert(it.element === "none", id + " element none");
+    assert(!it.bonuses || Object.keys(it.bonuses).length === 0, id + " empty bonuses");
+    assert(it.weaponClass, id + " has weaponClass");
+  });
+  const w = DATA.ITEMS.weapon_short;
+  assert(w.weaponAtk === 70 && w.weaponMatk === 0 && w.reqLevel === 1 && w.price === 200, "short 70/1/200");
+  assert(DATA.ITEMS.weapon_void.weaponAtk === 200 && DATA.ITEMS.weapon_void.tier === "high", "void 200 high");
+  const stf = DATA.ITEMS.weapon_staff;
+  assert(stf.weaponAtk === 0 && stf.weaponMatk === 100, "staff MATK only");
+  assert(DATA.ITEMS.weapon_sage.weaponMatk === 260, "sage MATK 260");
+  assert(DATA.ITEMS.weapon_waraxe.weaponAtk === 250, "waraxe 250");
+  assert(DATA.canJobWear("warrior", DATA.ITEMS.weapon_short), "warrior sword ok");
+  assert(DATA.canJobWear("warrior", DATA.ITEMS.weapon_hatchet), "warrior axe ok");
+  assert(!DATA.canJobWear("warrior", DATA.ITEMS.weapon_bow), "warrior bow no");
+  assert(!DATA.canJobWear("warrior", DATA.ITEMS.weapon_staff), "warrior staff no");
+  assert(DATA.canJobWear("assassin", DATA.ITEMS.weapon_knife), "assassin dagger ok");
+  assert(!DATA.canJobWear("assassin", DATA.ITEMS.weapon_short), "assassin sword no");
+  assert(DATA.canJobWear("hunter", DATA.ITEMS.weapon_bow) && DATA.canJobWear("hunter", DATA.ITEMS.weapon_dirk), "hunter bow+dagger");
+  assert(!DATA.canJobWear("hunter", DATA.ITEMS.weapon_short), "hunter sword no");
+  const line = DATA.itemStatLine(DATA.ITEMS.weapon_oakbow);
+  assert(line.indexOf("Weapon ATK 100") >= 0, "line Weapon ATK, got " + line);
+  assert(line.indexOf("Archer") >= 0 && line.indexOf("ต้องการ Lv 12") >= 0, "line jobs+lv");
+  assert(line.indexOf("ธาตุ") < 0 && line.toLowerCase().indexOf("element") < 0, "line no element");
+  const staffLine = DATA.itemStatLine(DATA.ITEMS.weapon_arch);
+  assert(staffLine.indexOf("Weapon MATK 170") >= 0, "staff line MATK");
+  const save = PVE.createSave("hunter", DATA.emptyAllocated());
+  save.owned.weapon_short = true;
+  const deny = PVE.equipItem(save, "weapon", "weapon_short");
+  assert(!deny.ok && deny.reason === "อาชีพนี้ใส่ไม่ได้", "hunter sword denied");
+  save.equip.weapon = "weapon_short";
+  PVE.ensureProgress(save);
+  assert(save.equip.weapon == null, "hunter sword stripped");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");
