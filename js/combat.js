@@ -81,6 +81,10 @@
       critMult: derived.critMult,
       dodge: derived.dodge,
       accuracy: derived.accuracy,
+      hit: derived.hit != null ? derived.hit : 0,
+      flee: derived.flee != null ? derived.flee : 0,
+      perfectDodge: derived.perfectDodge != null ? derived.perfectDodge : 0,
+      fleeSkillBonus: derived.fleeSkillBonus || 0,
       hpRegen: derived.hpRegen || 0,
       mpRegen: derived.mpRegen || 0,
       statusResist: derived.statusResist || 0,
@@ -249,13 +253,16 @@
     const isPhysical = (atkRatio || 0) !== 0;
 
     let crit = false;
-    if (!opts.isPoison && opts.canCrit !== false && isPhysical) {
-      let critChance = COMBAT.effectiveCrit(attacker);
-      if (opts.bonusCrit) critChance += opts.bonusCrit;
-      if (attacker.isHero) critChance = Math.min(DATA.HERO_CRIT_CAP, critChance);
-      else critChance = Math.min(100, critChance);
-      if (opts.forceCrit) crit = true;
-      else if (opts.rng && opts.rng.chance(critChance)) crit = true;
+    if (!opts.isPoison && isPhysical) {
+      if (opts.forceCrit) {
+        crit = true;
+      } else if (opts.canCrit !== false) {
+        let critChance = COMBAT.effectiveCrit(attacker);
+        if (opts.bonusCrit) critChance += opts.bonusCrit;
+        if (attacker.isHero) critChance = Math.min(DATA.HERO_CRIT_CAP, critChance);
+        else critChance = Math.min(100, critChance);
+        if (opts.rng && opts.rng.chance(critChance)) crit = true;
+      }
     }
 
     if (!opts.ignoreArmor) {
@@ -306,13 +313,93 @@
     };
   };
 
-  COMBAT.hitChance = function (attacker, target, vsSilence) {
-    return COMBAT.effectiveAccuracy(attacker) - COMBAT.effectiveDodge(target, vsSilence);
+  COMBAT.effectiveHit = function (unit) {
+    let h = Number(unit && unit.hit) || 0;
+    if (unit && unit.focusTurns > 0) h += unit.focusAcc || 0;
+    if (unit && unit.markTurns > 0) h += unit.markAcc || 0;
+    return h;
+  };
+
+  COMBAT.unitFleeSkillBonus = function (unit, vsSilence) {
+    let b = Number(unit && unit.fleeSkillBonus) || 0;
+    if (!unit) return b;
+    if (unit.fogTurns > 0) b += unit.fogDodge || 0;
+    if (!vsSilence && unit.veilTurns > 0) b += unit.veilDodge || 0;
+    if (!vsSilence && unit.phantomTurns > 0) b += unit.phantomDodge || 0;
+    if (unit.angelVeilTurns > 0) b += unit.angelDodge || 0;
+    return b;
+  };
+
+  COMBAT.surroundCount = function (state) {
+    if (!state) return 1;
+    let list = null;
+    if (Array.isArray(state.foes)) list = state.foes;
+    else if (state.encounter && Array.isArray(state.encounter.foes)) list = state.encounter.foes;
+    else if (Array.isArray(state.entities)) {
+      list = state.entities.filter(function (e) {
+        return e && e.kind !== "player" && !e.dead && e.aggro;
+      });
+    }
+    if (!list || !list.length) return 1;
+    let n = 0;
+    list.forEach(function (f) {
+      if (!f) return;
+      if (f.dead) return;
+      const unit = f.unit || f;
+      if (unit && unit.hp != null && unit.hp <= 0) return;
+      n += 1;
+    });
+    return n > 0 ? n : 1;
+  };
+
+  COMBAT.defenderActualFlee = function (target, vsSilence, surround) {
+    const skill = COMBAT.unitFleeSkillBonus(target, vsSilence);
+    const score = Number(target && target.flee) || 0;
+    if (target && target.isHero) {
+      return STATS.actualFlee(score, skill, surround != null ? surround : 1);
+    }
+    return score + skill;
+  };
+
+  COMBAT.hitChance = function (attacker, target, vsSilence, surround) {
+    return STATS.hitChance(COMBAT.effectiveHit(attacker), COMBAT.defenderActualFlee(target, vsSilence, surround));
+  };
+
+  COMBAT.rollConnect = function (attacker, target, rng, opts) {
+    opts = opts || {};
+    const atkR = opts.atkRatio != null ? opts.atkRatio : 1;
+    const matkR = opts.matkRatio != null ? opts.matkRatio : 0;
+    const isMagic = !!(opts.isMagic || ((atkR || 0) === 0 && (matkR || 0) > 0));
+    if (isMagic) {
+      return { hit: true, crit: false, pd: false };
+    }
+
+    const pd = Number(target && target.perfectDodge) || 0;
+    if (pd > 0 && rng && rng.chance(pd)) {
+      return { hit: false, crit: false, pd: true };
+    }
+
+    let crit = false;
+    if (opts.canCrit !== false) {
+      let critChance = COMBAT.effectiveCrit(attacker);
+      if (opts.bonusCrit) critChance += opts.bonusCrit;
+      if (attacker && attacker.isHero) critChance = Math.min(DATA.HERO_CRIT_CAP, critChance);
+      else critChance = Math.min(100, critChance);
+      if (opts.forceCrit) crit = true;
+      else if (rng && rng.chance(critChance)) crit = true;
+    }
+    if (crit) {
+      return { hit: true, crit: true, pd: false };
+    }
+
+    const surround = opts.surround != null ? opts.surround : 1;
+    const chance = COMBAT.hitChance(attacker, target, opts.vsSilence, surround);
+    const hit = rng ? rng.chance(chance) : chance >= 100;
+    return { hit: !!hit, crit: false, pd: false };
   };
 
   COMBAT.rollHit = function (attacker, target, rng, vsSilence) {
-    const chance = COMBAT.hitChance(attacker, target, vsSilence);
-    return rng.chance(chance);
+    return COMBAT.rollConnect(attacker, target, rng, { vsSilence: vsSilence }).hit;
   };
 
   COMBAT.rollStatus = function (target, rng) {
@@ -415,6 +502,7 @@
 
   COMBAT.applyRegen = function (state, unit) {
     if (!unit.isHero) return;
+    if (unit.noRegen) return;
     const h = COMBAT.healUnit(unit, unit.hpRegen);
     const m = COMBAT.restoreMp(unit, unit.mpRegen);
     if (h > 0 || m > 0) {
@@ -898,35 +986,52 @@
       actor.nextAtkBonus = 0;
     }
     const rng = state.rng;
-    if (!extra.skipHitCheck && !COMBAT.rollHit(actor, target, rng, extra.vsSilence)) {
-      COMBAT.pushLog(
-        state,
-        '<span class="log-miss">💨 ' + actor.name + " ใช้ " + skillName + " — หลบหลีก!</span>"
-      );
-      COMBAT.emitFx(state, { kind: "miss", side: target.side });
-      if (target.counter) {
-        const hpH = COMBAT.healUnit(target, 2.0 * target.matk);
-        const mpH = COMBAT.restoreMp(target, 0.1 * target.matk);
-        target.counter = false;
+    const isMagic = extra.isMagic || ((atkR || 0) === 0 && (matkR || 0) > 0);
+    let conn = { hit: true, crit: false, pd: false };
+    if (!extra.skipHitCheck && !isMagic) {
+      COMBAT.consumeGuardCrit(actor, extra);
+      conn = COMBAT.rollConnect(actor, target, rng, {
+        atkRatio: atkR,
+        matkRatio: matkR,
+        vsSilence: extra.vsSilence,
+        surround: extra.surround != null ? extra.surround : COMBAT.surroundCount(state),
+        bonusCrit: extra.bonusCrit || 0,
+        canCrit: extra.canCrit !== false,
+        forceCrit: extra.forceCrit,
+      });
+      if (!conn.hit) {
         COMBAT.pushLog(
           state,
-          '<span class="log-heal">🗡️ ' +
-            target.name +
-            " หลบได้ขณะตั้งท่าสวนกลับ! ฟื้นฟู HP +" +
-            hpH +
-            " MP +" +
-            mpH +
-            "</span>"
+          '<span class="log-miss">💨 ' + actor.name + " ใช้ " + skillName + " — หลบหลีก!</span>"
         );
-        if (hpH > 0) COMBAT.emitFx(state, { kind: "heal", side: target.side, amount: hpH, source: "counter-dodge" });
+        COMBAT.emitFx(state, { kind: "miss", side: target.side, pd: !!conn.pd });
+        if (target.counter) {
+          const hpH = COMBAT.healUnit(target, 2.0 * target.matk);
+          const mpH = COMBAT.restoreMp(target, 0.1 * target.matk);
+          target.counter = false;
+          COMBAT.pushLog(
+            state,
+            '<span class="log-heal">🗡️ ' +
+              target.name +
+              " หลบได้ขณะตั้งท่าสวนกลับ! ฟื้นฟู HP +" +
+              hpH +
+              " MP +" +
+              mpH +
+              "</span>"
+          );
+          if (hpH > 0) COMBAT.emitFx(state, { kind: "heal", side: target.side, amount: hpH, source: "counter-dodge" });
+        }
+        return { hit: false, damage: 0, crit: false, pd: conn.pd };
       }
-      return { hit: false, damage: 0, crit: false };
+      extra.forceCrit = conn.crit;
+      extra.canCrit = false;
     }
 
     const opts = COMBAT.consumeGuardCrit(actor, {
       rng: rng,
       canCrit: extra.canCrit !== false,
       bonusCrit: extra.bonusCrit || 0,
+      forceCrit: extra.forceCrit,
     });
     const calc = COMBAT.calcDamage(actor, target, atkR, matkR, opts);
     const applied = COMBAT.applyIncoming(state, actor, target, calc.damage, skillName);
@@ -1007,7 +1112,7 @@
         break;
       }
       case "shadowkill": {
-        if (!COMBAT.rollHit(actor, target, state.rng)) {
+        if (!COMBAT.rollConnect(actor, target, state.rng, { atkRatio: 1, matkRatio: 0, surround: COMBAT.surroundCount(state) }).hit) {
           COMBAT.pushLog(
             state,
             '<span class="log-miss">💨 ' + actor.name + " ใช้ " + def.name + " — หลบหลีก!</span>"
@@ -1229,12 +1334,13 @@
           COMBAT.spendSilenceBlocked(state, actor, target, def.name, "เกราะเวทมนตร์บล็อกคาถาสะกดทั้งหมด");
           break;
         }
-        if (!COMBAT.rollHit(actor, target, state.rng, true)) {
+        const silConn = COMBAT.rollConnect(actor, target, state.rng, { atkRatio: 2.0, matkRatio: 0, vsSilence: true, surround: COMBAT.surroundCount(state) });
+        if (!silConn.hit) {
           COMBAT.pushLog(
             state,
             '<span class="log-miss">💨 ' + target.name + " หลบคาถาสะกดได้!</span>"
           );
-          COMBAT.emitFx(state, { kind: "miss", side: target.side });
+          COMBAT.emitFx(state, { kind: "miss", side: target.side, pd: !!silConn.pd });
           if (target.counter) {
             const hpH = COMBAT.healUnit(target, 2.0 * target.matk);
             const mpH = COMBAT.restoreMp(target, 0.1 * target.matk);
@@ -1260,7 +1366,7 @@
           );
           break;
         }
-        const res = COMBAT.doHitAttack(state, actor, target, def.name, 2.0, 0, { canCrit: true, skipHitCheck: true });
+        const res = COMBAT.doHitAttack(state, actor, target, def.name, 2.0, 0, { skipHitCheck: true, forceCrit: silConn.crit, canCrit: false });
         if (res.hit && !state.over) {
           target.atb = 0;
           COMBAT.pushLog(
@@ -1383,7 +1489,7 @@
         if (res.hit && !state.over && state.rng.chance(40)) {
           if (hadGuard) {
             COMBAT.spendSilenceBlocked(state, actor, target, def.name, "เกราะเวทมนตร์บล็อกการรีเซ็ตเกจจากปีกปกรรมณ์");
-          } else if (!COMBAT.rollHit(actor, target, state.rng, true)) {
+          } else if (!COMBAT.rollConnect(actor, target, state.rng, { atkRatio: 1, matkRatio: 0, vsSilence: true, surround: COMBAT.surroundCount(state) }).hit) {
             COMBAT.pushLog(state, '<span class="log-miss">💨 ' + target.name + " หลบการสะกดจากปีกปกรรมณ์!</span>");
             COMBAT.emitFx(state, { kind: "miss", side: target.side });
           } else if (!COMBAT.rollStatus(target, state.rng)) {
@@ -1705,7 +1811,7 @@
       unit._buffAcc -= COMBAT.TURN_MS;
       COMBAT.tickBuffDurations(state, unit);
       COMBAT.tickOwnFocusMark(state, unit);
-      COMBAT.applyRegen(state, unit);
+      if (!unit.sitting) COMBAT.applyRegen(state, unit);
     }
     unit._poisonAcc = (unit._poisonAcc || 0) + dt;
     while (unit.poisons && unit.poisons.length && unit._poisonAcc >= 1000) {

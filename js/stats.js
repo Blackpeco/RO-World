@@ -61,6 +61,9 @@
       critMult: 0,
       dodge: 0,
       accuracy: 0,
+      hit: 0,
+      flee: 0,
+      perfectDodge: 0,
       hpRegen: 0,
       mpRegen: 0,
       statusResist: 0,
@@ -120,6 +123,53 @@
       }
     });
     return out;
+  };
+
+
+  /* ---------- locked HIT / FLEE / Perfect Dodge ---------- */
+  STATS.round1 = function (x) {
+    return Math.round(Number(x) * 10 + 1e-12) / 10;
+  };
+
+  STATS.playerHit = function (baseLv, dex, luk, bonus) {
+    return 175 + (Number(baseLv) || 0) + (Number(dex) || 0) + Math.floor((Number(luk) || 0) / 3) + (Number(bonus) || 0);
+  };
+
+  STATS.playerFlee = function (baseLv, agi, luk, itemBonus) {
+    return 100 + (Number(baseLv) || 0) + (Number(agi) || 0) + Math.floor((Number(luk) || 0) / 5) + (Number(itemBonus) || 0);
+  };
+
+  STATS.perfectDodge = function (luk, mods) {
+    return STATS.round1(1 + (Number(luk) || 0) * 0.1 + (Number(mods) || 0));
+  };
+
+  STATS.monsterHit = function (baseLv, dex) {
+    return 170 + (Number(baseLv) || 0) + (Number(dex) || 0);
+  };
+
+  STATS.monsterFlee = function (baseLv, agi) {
+    return 100 + (Number(baseLv) || 0) + (Number(agi) || 0);
+  };
+
+  /**
+   * FLEE score is WITHOUT SkillBonus. SkillBonus sits outside the surround shrink.
+   * 1–2 mobs: no shrink. 12+ mobs: factor 0 → 100 + SkillBonus.
+   */
+  STATS.actualFlee = function (flee, skillBonus, mobs) {
+    flee = Number(flee) || 0;
+    skillBonus = Number(skillBonus) || 0;
+    mobs = Number(mobs);
+    if (!(mobs > 0)) mobs = 1;
+    if (mobs <= 2) return flee + skillBonus;
+    const factor = Math.max(0, 1 - (mobs - 2) * 0.1);
+    return 100 + skillBonus + (flee - 100) * factor;
+  };
+
+  STATS.hitChance = function (attackerHit, defenderFleeActual) {
+    const raw = (Number(attackerHit) || 0) - (Number(defenderFleeActual) || 0);
+    if (raw < 5) return 5;
+    if (raw > 100) return 100;
+    return raw;
   };
 
   /* ---------- locked ASPD + physical Soft/Hard DEF ---------- */
@@ -221,6 +271,10 @@
 
   STATS.monsterSoftDef = function (vit, baseLv) {
     return Math.floor(((Number(vit) || 0) + (Number(baseLv) || 1)) / 2);
+  };
+
+  STATS.monsterSoftMdef = function (int, baseLv) {
+    return Math.floor(((Number(int) || 0) + (Number(baseLv) || 1)) / 2);
   };
 
   STATS.totalSoft = function (soft, bonusA, bonusB) {
@@ -356,6 +410,9 @@
       critMult: base.critMult + fromEq.critMult,
       dodge: base.dodge + fromPts.dodge + fromEq.dodge,
       accuracy: DATA.HERO_BASE_ACCURACY + fromPts.accuracy + fromEq.accuracy,
+      hit: STATS.playerHit(level, totalPts.dex || 0, totalPts.luk || 0, fromEq.hit || 0),
+      flee: STATS.playerFlee(level, totalPts.agi || 0, totalPts.luk || 0, fromEq.flee || 0),
+      perfectDodge: STATS.perfectDodge(totalPts.luk || 0, fromEq.perfectDodge || 0),
       hpRegen: base.hpRegen + fromPts.hpRegen + fromEq.hpRegen,
       mpRegen: base.mpRegen + fromPts.mpRegen + fromEq.mpRegen,
       statusResist: fromPts.statusResist + fromEq.statusResist,
@@ -379,6 +436,8 @@
     stats.hasShield = hasShield;
     stats.refine = refine;
     stats.equip = equip;
+    stats.maxWeight = DATA.maxWeight(totalPts.str || 0);
+    stats.str = totalPts.str || 0;
 
     const hasEquip = DATA.SLOTS.some(function (slot) {
       return !!equip[slot.id];
@@ -396,9 +455,12 @@
         softDef: stats.softDef - bare.softDef,
         hardDef: stats.hardDef - bare.hardDef,
         aspd: stats.aspd - bare.aspd,
+        hit: stats.hit - bare.hit,
+        flee: stats.flee - bare.flee,
+        perfectDodge: stats.perfectDodge - bare.perfectDodge,
       };
     } else {
-      stats.gearDelta = { maxHp: 0, maxMp: 0, atk: 0, matk: 0, def: 0, mdef: 0, aspeed: 0, softDef: 0, hardDef: 0, aspd: 0 };
+      stats.gearDelta = { maxHp: 0, maxMp: 0, atk: 0, matk: 0, def: 0, mdef: 0, aspeed: 0, softDef: 0, hardDef: 0, aspd: 0, hit: 0, flee: 0, perfectDodge: 0 };
     }
     return stats;
   };
@@ -437,6 +499,9 @@
       critMult: bossDef.critMult,
       dodge: Math.min(DATA.BOSS_DODGE_CAP, bossDef.dodge),
       accuracy: bossDef.accuracy,
+      hit: STATS.monsterHit(bossDef.level || 1, bossDef.dex || 0),
+      flee: STATS.monsterFlee(bossDef.level || 1, bossDef.agi || 0),
+      perfectDodge: bossDef.perfectDodge != null ? Number(bossDef.perfectDodge) : (bossDef.pd != null ? Number(bossDef.pd) : 0),
       hpRegen: 0,
       mpRegen: 0,
       statusResist: 0,
@@ -460,6 +525,9 @@
     const soft = mobDef.vit != null
       ? STATS.monsterSoftDef(mobDef.vit, mobDef.level || 1)
       : mobDef.def;
+    const softM = mobDef.int != null
+      ? STATS.monsterSoftMdef(mobDef.int, mobDef.level || 1)
+      : mobDef.mdef;
     return {
       heroId: mobDef.id,
       name: mobDef.name,
@@ -473,9 +541,9 @@
       def: mobDef.def,
       mdef: mobDef.mdef,
       softDef: soft,
-      softMdef: mobDef.mdef,
+      softMdef: softM,
       hardDef: mobDef.hardDef || 0,
-      hardMdef: 0,
+      hardMdef: mobDef.hardMdef || 0,
       aspeed: aspdInfo ? aspdInfo.finalAspd : mobDef.aspeed,
       aspd: aspdInfo ? aspdInfo.aspd : null,
       finalAspd: aspdInfo ? aspdInfo.finalAspd : null,
@@ -483,6 +551,9 @@
       critMult: mobDef.critMult,
       dodge: Math.min(DATA.BOSS_DODGE_CAP, mobDef.dodge || 0),
       accuracy: mobDef.accuracy,
+      hit: STATS.monsterHit(mobDef.level || 1, mobDef.dex || 0),
+      flee: STATS.monsterFlee(mobDef.level || 1, mobDef.agi || 0),
+      perfectDodge: mobDef.perfectDodge != null ? Number(mobDef.perfectDodge) : (mobDef.pd != null ? Number(mobDef.pd) : 0),
       hpRegen: 0,
       mpRegen: 0,
       statusResist: 0,

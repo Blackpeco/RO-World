@@ -80,7 +80,7 @@
     App.pendingAlloc = null;
     App.pendingName = null;
     App.levelAlloc = false;
-    App.goPve({ firstRun: true });
+    App.goCharSelect();
   };
 
   App.goPve = function (opts) {
@@ -91,8 +91,70 @@
     UI.heroSelect({
       title: "เลือกอาชีพ",
       subtitle: "นักรบผู้กล้า · มือสังหารเงา · นักล่าผู้ใช้เหยี่ยว",
-      hideBack: !!opts.firstRun,
+      hideBack: false,
     });
+  };
+
+  App.goCharSelect = function () {
+    stopLoop();
+    if (typeof WORLD !== "undefined" && WORLD.teardown) WORLD.teardown();
+    if (typeof MAP !== "undefined") MAP.teardown();
+    UI.closeBag && UI.closeBag();
+    UI.closeCityWin && UI.closeCityWin();
+    App.flow = "pve";
+    App.save = null;
+    App.pendingHero = null;
+    App.pendingName = null;
+    App.allocSess = null;
+    App.screen = "char-select";
+    UI.charSelect();
+  };
+
+  App.loadAccount = function (username) {
+    const save = PVE.readAccount(username);
+    if (!save) {
+      UI.toast("ไม่พบข้อมูล username นี้");
+      return;
+    }
+    App.flow = "pve";
+    App.save = save;
+    if (App.goWorld && save.mapId && save.mapId !== "city") App.goWorld();
+    else App.goCity();
+  };
+
+  App.loginByUsername = function () {
+    const el = document.getElementById("login-user");
+    App.loadAccount(el ? el.value : "");
+  };
+
+  App.goSave = function () {
+    if (!App.save) {
+      UI.toast("ยังไม่มีตัวละคร");
+      return;
+    }
+    if (App.mapIsLive && App.mapIsLive()) {
+      if (App.toggleCityWin) App.toggleCityWin("save");
+      else UI.openCityWin("save", App.save);
+      return;
+    }
+    UI.openCityWin("save", App.save);
+  };
+
+  App.confirmSave = function () {
+    const el = document.getElementById("save-user");
+    const v = PVE.validateUsername(el ? el.value : "");
+    if (!v.ok) {
+      UI.toast("ใส่ Username 1–24 ตัว ใช้ภาษาไทยได้");
+      return;
+    }
+    App.save.username = v.name;
+    const r = PVE.writeAccount(v.name, App.save);
+    if (!r.ok) {
+      UI.toast("บันทึกไม่สำเร็จ");
+      return;
+    }
+    UI.toast("บันทึกแล้ว: " + v.name);
+    UI.closeCityWin && UI.closeCityWin();
   };
 
   App.goPvpMenu = function () {
@@ -110,6 +172,10 @@
     }
     if (App.flow === "pvp") {
       App.goPvpMenu();
+      return;
+    }
+    if (App.flow === "pve") {
+      App.goCharSelect();
       return;
     }
     App.goHome();
@@ -244,6 +310,7 @@
       PVE.syncVitals(App.save);
       App.allocSess = null;
       App.goCity();
+      UI.toast("กด SAVE เพื่อบันทึกด้วย username");
       return;
     }
     if (App.pvp && App.pvp.kind === "room") {
@@ -452,6 +519,9 @@
     else if (next === "status") App.goCityStatus();
     else if (next === "skills") App.goCitySkills();
     else if (next === "refine") App.goRefine();
+    else if (next === "save") UI.openCityWin("save", App.save);
+    else if (next === "farm") App.goFarm();
+    else if (next === "inv") App.goInv();
   };
 
     App.mapIsLive = function () {
@@ -546,11 +616,65 @@
 
   App.openBag = function () {
     if (!App.save) return;
-    UI.openBag(App.save);
+    App.goInv();
   };
 
   App.closeBag = function () {
-    UI.closeBag();
+    UI.closeBag && UI.closeBag();
+    if (UI._cityWinKind === "inv") App.closeCityWin();
+  };
+
+  App.goFarm = function () {
+    if (!App.save) return;
+    PVE.ensureProgress(App.save);
+    UI.openCityWin("farm", App.save);
+  };
+
+  App.goInv = function () {
+    if (!App.save) return;
+    PVE.ensureProgress(App.save);
+    UI.openCityWin("inv", App.save);
+  };
+
+  App.setAutoFarm = function (on) {
+    if (!App.save) return;
+    App.save.autoFarm = !!on;
+    UI.toast(App.save.autoFarm ? "Auto Farm เปิด" : "Auto Farm ปิด");
+    UI.refreshHud && UI.refreshHud(App.save);
+    if (typeof MAP !== "undefined" && MAP.resumeAutoIfNeeded) MAP.resumeAutoIfNeeded(App.save);
+    if (App.cityWinOpen() && UI._cityWinKind === "farm") UI.openCityWin("farm", App.save);
+  };
+
+  App.setFarmSit = function (spec) {
+    if (!App.save) return;
+    PVE.setFarmSit(App.save, spec);
+    UI.openCityWin("farm", App.save);
+  };
+
+  App.setFarmSkill = function (slot, skillId) {
+    if (!App.save) return;
+    PVE.setFarmSkill(App.save, slot, skillId);
+    UI.openCityWin("farm", App.save);
+  };
+
+  App.setFarmPot = function (slot, spec) {
+    if (!App.save) return;
+    PVE.setFarmPot(App.save, slot, spec);
+    UI.openCityWin("farm", App.save);
+  };
+
+  App._farmPickSkill = function (skillId) {
+    App._farmPickedSkill = skillId || null;
+    if (typeof document === "undefined") return;
+    var pal = document.querySelectorAll(".farm-pal-skill");
+    pal.forEach(function (el) {
+      el.classList.toggle("picked", el.getAttribute("data-skill") === App._farmPickedSkill);
+    });
+  };
+
+  App.setInvTab = function (tab) {
+    UI._invTab = tab === "equip" || tab === "mat" ? tab : "use";
+    if (App.save) UI.openCityWin("inv", App.save);
   };
 
   App.usePotion = function (id) {
@@ -566,7 +690,9 @@
     const item = DATA.POTIONS[id];
     if (r.buff) UI.toast(item.name + " · " + item.desc);
     else UI.toast((item && item.name) + " +" + (r.healedHp || 0) + " HP +" + (r.healedMp || 0) + " MP");
-    if (document.getElementById("bag-overlay") && document.getElementById("bag-overlay").className === "show") {
+    if (App.cityWinOpen() && UI._cityWinKind === "inv") {
+      UI.openCityWin("inv", App.save);
+    } else if (document.getElementById("bag-overlay") && document.getElementById("bag-overlay").className === "show") {
       UI.openBag(App.save);
     }
     if (App.combat && App.screen === "combat") App.updateGauges();
@@ -582,6 +708,7 @@
     UI.toast(App.save.autoFarm ? "Auto Farm เปิด" : "Auto Farm ปิด");
     UI.refreshHud(App.save);
     if (typeof MAP !== "undefined" && MAP.resumeAutoIfNeeded) MAP.resumeAutoIfNeeded(App.save);
+    if (App.cityWinOpen() && UI._cityWinKind === "farm") UI.openCityWin("farm", App.save);
     if (!App.save.autoFarm && typeof MAP !== "undefined" && App.screen === "map") {
       /* walker stops on next tick via save flag */
     }
@@ -728,6 +855,13 @@
   App.attemptRefine = function (itemId) {
     if (!App.save) return;
     const r = PVE.attemptRefine(App.save, itemId);
+    if (r.ok && typeof AUDIO !== "undefined" && AUDIO.play) {
+      AUDIO.play("ui_refine_hit", { bus: "ui" });
+      const resultId = r.success ? "ui_refine_ok" : "ui_refine_fail";
+      setTimeout(function () {
+        AUDIO.play(resultId, { bus: "ui" });
+      }, 150);
+    }
     if (!r.ok) {
       UI.toast(r.reason || "ตีบวกไม่ได้");
     } else if (r.success) {
@@ -746,6 +880,11 @@
   App.toggleInvItem = function (itemId) {
     const r = PVE.toggleInventoryItem(App.save, itemId);
     if (!r || !r.ok) UI.toast((r && r.reason) || "สวมใส่ไม่ได้");
+    if (App.cityWinOpen() && UI._cityWinKind === "inv") {
+      UI.openCityWin("inv", App.save);
+      UI.refreshHud && UI.refreshHud(App.save);
+      return;
+    }
     App.refreshCityOrPage("equip");
   };
 
@@ -959,7 +1098,7 @@
             MAP.markMobDead(App._fieldMob.x, App._fieldMob.y);
           }
           const loot = (reward.loot || []).map(function (id) {
-            return DATA.POTIONS[id] ? DATA.POTIONS[id].name : id;
+            return DATA.lootName ? DATA.lootName(id) : id;
           }).join(", ");
           let msg = "+" + reward.baseExp + " Base EXP · +" + reward.jobExp + " Job EXP · +" + reward.zeno + " Zeno";
           if (loot) msg += " · ได้ " + loot;
@@ -1439,6 +1578,7 @@
           if (hk === "r" || hk === "R") { ev.preventDefault(); App.toggleCityWin("shop"); return; }
           if (hk === "c" || hk === "C") { ev.preventDefault(); App.toggleCityWin("status"); return; }
           if (hk === "k" || hk === "K") { ev.preventDefault(); App.toggleCityWin("skills"); return; }
+          if (hk === "i" || hk === "I") { ev.preventDefault(); App.toggleCityWin("inv"); return; }
         }
       }
       if (typeof WORLD !== "undefined" && WORLD.live && WORLD.live()) {
@@ -1473,7 +1613,21 @@
         }
       }
     });
-    App.goPve({ firstRun: true });
+    App.goCharSelect();
+    if (typeof location !== "undefined" && /(?:\?|&)shot=/.test(location.search)) {
+      const q = new URLSearchParams(location.search);
+      const shot = q.get("shot");
+      App.save = PVE.createSave("warrior", {}, "Shot");
+      App.flow = "pve";
+      if (shot === "field") {
+        App.save.mapId = "field";
+        App.goWorld();
+        return;
+      }
+      if (shot === "plaza") App.save.cityPos = { x: 40, y: 44 };
+      else if (shot === "park") App.save.cityPos = { x: 12, y: 68 };
+      App.goCity();
+    }
   };
 
   root.App = App;

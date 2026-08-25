@@ -46,6 +46,9 @@
       ["hardDef", " Hard DEF"],
       ["crit", "% คริ"],
       ["critMult", "% ตัวคูณคริ"],
+      ["hit", " HIT"],
+      ["flee", " FLEE"],
+      ["perfectDodge", " Perfect Dodge"],
       ["dodge", "% หลบ"],
       ["accuracy", "% แม่นยำ"],
       ["hpRegen", " HP ฟื้น/ตา"],
@@ -142,8 +145,9 @@
       "<div>" + UI.aspeedLine(st, g) + "</div>" +
       "<div>คริ <b>" + UI.fmt(st.crit) + "%</b></div>" +
       "<div>ตัวคูณคริ <b>" + UI.fmt(st.critMult) + "%</b></div>" +
-      "<div>หลบ <b>" + UI.fmt(st.dodge) + "%</b></div>" +
-      "<div>แม่นยำ <b>" + UI.fmt(st.accuracy) + "%</b></div>" +
+      "<div>" + UI.derPlus("HIT", st.hit, g.hit) + "</div>" +
+      "<div>" + UI.derPlus("FLEE", st.flee, g.flee) + "</div>" +
+      "<div>Perfect Dodge <b>" + (Number(st.perfectDodge) || 0).toFixed(1) + "</b></div>" +
       "<div>ต้านสถานะ <b>" + UI.fmt(st.statusResist) + "%</b></div>" +
       "<div>ฟื้น HP/ตา <b>" + UI.fmt(st.hpRegen) + "</b></div>" +
       "<div>ฟื้น MP/ตา <b>" + UI.fmt(st.mpRegen) + "</b></div>" +
@@ -197,9 +201,13 @@
   };
 
   UI.home = function () {
-    /* No player-facing PvP entry. If a save exists, resume Prontera; else first-run job select. */
+    /* No player-facing PvP entry. If a save exists, resume Prontera; else character select. */
     if (typeof App !== "undefined" && App.save && App.goCity) {
       App.goCity();
+      return;
+    }
+    if (typeof App !== "undefined" && App.goCharSelect) {
+      App.goCharSelect();
       return;
     }
     if (typeof App !== "undefined" && App.goPve) {
@@ -236,6 +244,80 @@
       '<button type="button" class="btn" onclick="App.pvpJoinScreen()">เข้าร่วมด้วยโค้ดคำเชิญ</button>' +
       '<button type="button" class="btn ghost" onclick="App.goHome()">กลับหน้าแรก</button>' +
       "</div></section>";
+  };
+
+  UI.charSelect = function () {
+    UI.setWalkMode(false);
+    const accounts = (typeof PVE !== "undefined" && PVE.listAccounts) ? PVE.listAccounts() : [];
+    const last = (typeof PVE !== "undefined" && PVE.lastUsername) ? (PVE.lastUsername() || "") : "";
+    const cards = accounts.length
+      ? accounts.map(function (a) {
+          const enc = encodeURIComponent(a.username || "");
+          return (
+            '<button type="button" class="char-slot" data-user="' +
+            UI.esc(a.username) +
+            '" onclick="App.loadAccount(decodeURIComponent(\'' +
+            enc +
+            "'))\">" +
+            '<div class="char-slot-art"><img src="assets/chars/' +
+            UI.esc(a.heroId || "warrior") +
+            '.png" alt=""></div>' +
+            '<div class="char-slot-meta">' +
+            "<b>" +
+            UI.esc(a.charName) +
+            "</b>" +
+            "<small>" +
+            UI.esc(a.jobName) +
+            "</small>" +
+            "<small>Base Lv " +
+            (a.baseLevel || 1) +
+            " / Job Lv " +
+            (a.jobLevel || 1) +
+            "</small>" +
+            '<small class="char-slot-user">' +
+            UI.esc(a.username) +
+            "</small>" +
+            "</div></button>"
+          );
+        }).join("")
+      : '<p class="hint char-empty">ยังไม่มีตัวละครบันทึก — กดสร้างตัวใหม่</p>';
+    UI.el().innerHTML =
+      '<section class="panel ro-win char-select">' +
+      '<div class="ro-title"><span>เลือกตัวละคร</span></div>' +
+      '<div class="ro-body">' +
+      '<p class="lead">เลือกตัวที่บันทึกไว้ หรือสร้างตัวใหม่ เพื่อเข้าเกม</p>' +
+      '<div class="char-slot-row">' +
+      cards +
+      "</div>" +
+      '<button type="button" class="btn gold wide" onclick="App.goPve({ firstRun: true })">สร้างตัวละครใหม่</button>' +
+      '<div class="char-login-row">' +
+      '<input id="login-user" class="ro-input" type="text" maxlength="24" lang="th" placeholder="ใส่ Username เพื่อเล่นต่อ" value="' +
+      UI.esc(last) +
+      '" autocomplete="username" />' +
+      '<button type="button" class="ro-btn" onclick="App.loginByUsername()">เล่นต่อ</button>' +
+      "</div></div></section>";
+    const inp = document.getElementById("login-user");
+    if (inp) {
+      inp.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          App.loginByUsername();
+        }
+      });
+    }
+  };
+
+  UI.saveForm = function (save) {
+    const pre = (save && save.username) || (typeof PVE !== "undefined" && PVE.lastUsername && PVE.lastUsername()) || "";
+    return (
+      '<div class="save-form">' +
+      '<input id="save-user" class="ro-input" type="text" maxlength="24" lang="th" placeholder="Username" value="' +
+      UI.esc(pre) +
+      '" autocomplete="username" onkeydown="if(event.key===\'Enter\'){event.preventDefault();App.confirmSave();}" />' +
+      '<button type="button" class="ro-btn" onclick="App.confirmSave()">บันทึก</button>' +
+      '<p class="hint">ใช้ username นี้ตอนเริ่มเกมเพื่อเล่นต่อ</p>' +
+      "</div>"
+    );
   };
 
   UI.heroSelect = function (opts) {
@@ -465,7 +547,9 @@
                 (can ? 'onclick="App.buyItem(\'' + it.id + "')\"" : "disabled") +
                 ">ซื้อ " +
                 it.price +
-                "</button>";
+                " · " +
+                DATA.itemWeight(it) +
+                "g</button>";
             const tier = it.tier === "high" ? '<span class="tier-high">ชั้นสูง</span>' : "";
             const plus = owned ? PVE.refineOf(save, it.id) : 0;
             return (
@@ -479,6 +563,7 @@
               tier +
               "<div class=\"item-bon\">" +
               (DATA.itemStatLine ? DATA.itemStatLine(it) : (UI.bonusText(it.bonuses) + " · " + UI.jobsText(it))) +
+              " · " + DATA.itemWeight(it) + "g" +
               '</div></div><div class="item-buy">' +
               btn +
               "</div></div>"
@@ -635,7 +720,10 @@
           const next = plus + 1;
           const cost = maxed ? 0 : DATA.refineCostTo(next);
           const chance = maxed ? 0 : DATA.refineChanceTo(next);
-          const can = !maxed && save.zeno >= cost;
+          const oreId = maxed ? null : DATA.refineOreFor(it, next);
+          const oreName = (oreId && DATA.MATERIALS[oreId] && DATA.MATERIALS[oreId].name) || oreId || "";
+          const oreHave = oreId ? ((save.materials && save.materials[oreId]) || 0) : 0;
+          const can = !maxed && save.zeno >= cost && oreHave >= 1;
           const worn = PVE.isEquipped(save, id);
           const extra = it.type === "weapon"
             ? "อาวุธ: +8 ATK / +8 MATK ต่อระดับ (ไม่เพิ่ม Hard DEF)"
@@ -652,8 +740,8 @@
             extra +
             (maxed
               ? " · สูงสุดแล้ว"
-              : " · ครั้งถัดไป +" + next + " ค่าใช้จ่าย " + cost + " Zeno · โอกาส " + chance + "%") +
-            "<br>ล้มเหลว: คงระดับเดิม ไม่พัง ไม่ลดระดับ (เสียเฉพาะ Zeno)</div></div>" +
+              : " · ครั้งถัดไป +" + next + " ค่าใช้จ่าย " + cost + " Zeno · ต้อง 1 " + oreName + " · โอกาส " + chance + "%") +
+            "<br>ล้มเหลว: คงระดับเดิม ไม่พัง ไม่ลดระดับ (เสีย Zeno และแร่)</div></div>" +
             '<div class="item-buy">' +
             (maxed
               ? '<span class="owned-tag">+10</span>'
@@ -897,9 +985,13 @@
           UI.aspeedLine(u, g) +
           " · คริ " +
           UI.fmt(COMBAT.effectiveCrit(u)) +
-          "% · หลบ " +
-          UI.fmt(COMBAT.effectiveDodge(u)) +
-          "%</div>"
+          "% · HIT " +
+          UI.fmt(u.hit) +
+          " · FLEE " +
+          UI.fmt(u.flee) +
+          " · Perfect Dodge " +
+          (Number(u.perfectDodge) || 0).toFixed(1) +
+          "</div>"
         );
       })() +
       "</article>"
@@ -1097,6 +1189,18 @@
     );
   };
 
+  UI.weightChip = function (save, derived) {
+    var ws = (derived && derived.weight && typeof derived.weight === "object")
+      ? derived.weight
+      : PVE.weightState(save);
+    var ratio = ws.ratio != null ? ws.ratio : (ws.max ? ws.cur / ws.max : 0);
+    var cls = ratio >= 1 ? " full" : ratio >= 0.9 ? " over" : ratio >= 0.7 ? " heavy" : "";
+    return (
+      '<span class="hud-weight' + cls + '" title="น้ำหนัก">น้ำหนัก ' +
+      Math.floor(ws.cur) + "/" + ws.max + " g</span>"
+    );
+  };
+
   UI.adventureHud = function (save, opts) {
     opts = opts || {};
     PVE.ensureProgress(save);
@@ -1139,8 +1243,9 @@
       UI.thinBar("base", save.baseExp, baseNeed, "EXP") +
       "</div>" +
       '<span class="zeno-chip hud-zeno">' + save.zeno + "</span>" +
+      UI.weightChip(save, d) +
       '<span class="rt-aspd" id="rt-aspd">ASPD —</span>' +
-      '<button type="button" class="hud-ico' + (farmOn ? " gold" : "") + '" onclick="App.toggleAutoFarm()" title="Auto Farm">F</button>' +
+      '<button type="button" class="hud-ico' + (farmOn ? " gold" : "") + '" onclick="App.goFarm()" title="Auto Farm">F</button>' +
       '<button type="button" class="hud-ico" onclick="App.openBag()" title="กระเป๋า">🎒</button>' +
       spend + cityBtns + extra +
       '<button type="button" class="hud-ico ghost" onclick="App.goHome()" title="หน้าแรก">⌂</button>' +
@@ -1341,18 +1446,23 @@
       '<button type="button" class="pad-btn pad-w" data-dx="-1" data-dy="0" aria-label="ซ้าย">◀</button>' +
       '<button type="button" class="pad-btn pad-e" data-dx="1" data-dy="0" aria-label="ขวา">▶</button>' +
       '<button type="button" class="pad-btn pad-s" data-dx="0" data-dy="1" aria-label="ลง">▼</button>' +
+      '<button type="button" class="pad-btn pad-nw" data-dx="-1" data-dy="-1" aria-label="ทแยงบนซ้าย">◤</button>' +
+      '<button type="button" class="pad-btn pad-ne" data-dx="1" data-dy="-1" aria-label="ทแยงบนขวา">◥</button>' +
+      '<button type="button" class="pad-btn pad-sw" data-dx="-1" data-dy="1" aria-label="ทแยงล่างซ้าย">◣</button>' +
+      '<button type="button" class="pad-btn pad-se" data-dx="1" data-dy="1" aria-label="ทแยงล่างขวา">◢</button>' +
       "</div>" +
       '<div class="hud-zone-lab">' + (titles[zone] || "") + "</div>" +
-      (zone === "city"
-        ? '<div id="city-dock" class="city-dock">' +
-          '<button type="button" class="ro-btn" onclick="App.goCitySkills()">SKILL <small>K</small></button>' +
-          '<button type="button" class="ro-btn" onclick="App.goCityStatus()">STATUS <small>C</small></button>' +
-          '<button type="button" class="ro-btn" onclick="App.goEquip()">สวมใส่ <small>E</small></button>' +
-          '<button type="button" class="ro-btn" onclick="App.goShop()">ร้านอุปกรณ์ <small>R</small></button>' +
-          '<button type="button" class="ro-btn" onclick="App.goRefine()">ตีบวก</button>' +
-          '<button type="button" class="ro-btn" onclick="App.goPotionShop()">ร้านยา <small>R</small></button>' +
-          "</div>"
-        : "") +
+      '<div id="city-dock" class="city-dock">' +
+      '<button type="button" class="ro-btn" onclick="App.goCitySkills()">SKILL <small>K</small></button>' +
+      '<button type="button" class="ro-btn" onclick="App.goCityStatus()">STATUS <small>C</small></button>' +
+      '<button type="button" class="ro-btn" onclick="App.goFarm()">FARM</button>' +
+      '<button type="button" class="ro-btn" onclick="App.goInv()">INV <small>I</small></button>' +
+      '<button type="button" class="ro-btn" onclick="App.goEquip()">สวมใส่ <small>E</small></button>' +
+      '<button type="button" class="ro-btn" onclick="App.goShop()">ร้านอุปกรณ์ <small>R</small></button>' +
+      '<button type="button" class="ro-btn" onclick="App.goRefine()">ตีบวก</button>' +
+      '<button type="button" class="ro-btn" onclick="App.goPotionShop()">ร้านยา <small>R</small></button>' +
+      '<button type="button" class="ro-btn" onclick="App.goSave()">SAVE</button>' +
+      "</div>" +
       "</section>";
     if (typeof MAP !== "undefined") MAP.mount(document.getElementById("world-map"), save);
   };
@@ -1373,7 +1483,11 @@
       '<button type="button" class="pad-btn pad-n" data-dx="0" data-dy="-1">▲</button>' +
       '<button type="button" class="pad-btn pad-w" data-dx="-1" data-dy="0">◀</button>' +
       '<button type="button" class="pad-btn pad-e" data-dx="1" data-dy="0">▶</button>' +
-      '<button type="button" class="pad-btn pad-s" data-dx="0" data-dy="1">▼</button></div>' +
+      '<button type="button" class="pad-btn pad-s" data-dx="0" data-dy="1">▼</button>' +
+      '<button type="button" class="pad-btn pad-nw" data-dx="-1" data-dy="-1">◤</button>' +
+      '<button type="button" class="pad-btn pad-ne" data-dx="1" data-dy="-1">◥</button>' +
+      '<button type="button" class="pad-btn pad-sw" data-dx="-1" data-dy="1">◣</button>' +
+      '<button type="button" class="pad-btn pad-se" data-dx="1" data-dy="1">◢</button></div>' +
       '<button type="button" class="hud-ico ghost hud-forfeit" onclick="App.goHome()">ถอนตัว</button>' +
       "</section>";
     const host = document.getElementById("world-map");
@@ -1419,12 +1533,12 @@
       const remainTxt = remain > 0 ? " · เหลือ " + PVE.fmtRemain(remain) : "";
       return (
         '<div class="item-row"><div><b>' + it.emoji + " " + it.name +
-        "</b><div class=\"item-bon\">" + it.desc + " · มี " + n +
+        "</b><div class=\"item-bon\">" + it.desc + " · " + DATA.itemWeight(it) + "g · มี " + n +
         " ขวด" + remainTxt +
         '</div></div><div class="item-buy">' +
         '<button type="button" class="btn small ' + (can ? "gold" : "disabled") + '" ' +
         (can ? 'onclick="App.buyPotion(\'' + id + "')\"" : "disabled") +
-        ">ซื้อ " + it.price + "</button></div></div>"
+        ">ซื้อ " + it.price + " · " + DATA.itemWeight(it) + "g</button></div></div>"
       );
     }).join("");
     const nav = opts.overlay
@@ -1459,6 +1573,280 @@
       "</div></section>";
   };
 
+  UI._invTab = UI._invTab || "use";
+
+  UI.slotTypeLabel = function (item) {
+    if (!item) return "";
+    var slots = DATA.SLOTS || [];
+    var i;
+    for (i = 0; i < slots.length; i++) {
+      if (slots[i].type === item.type) return slots[i].name;
+    }
+    return item.type || "";
+  };
+
+  UI.farmWin = function (save) {
+    PVE.ensureProgress(save);
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var farmOn = !!save.autoFarm;
+    var learned = PVE.learnedSkillIds(save);
+    var pal = learned.map(function (id) {
+      var def = DATA.SKILLS[id] || {};
+      var icon = def.icon || "";
+      var picked = typeof App !== "undefined" && App._farmPickedSkill === id;
+      return (
+        '<button type="button" class="farm-pal-skill' + (picked ? " picked" : "") +
+        '" draggable="true" data-skill="' + UI.esc(id) +
+        '" onclick="App._farmPickSkill(this.dataset.skill)">' +
+        (icon ? '<img src="' + UI.esc(icon) + '" alt="">' : "") +
+        "<span>" + UI.esc(def.name || id) + "</span></button>"
+      );
+    }).join("");
+    var slots = "";
+    var i;
+    for (i = 0; i < 4; i++) {
+      var sid = cfg.skills[i];
+      var def = sid ? DATA.SKILLS[sid] : null;
+      var inner;
+      if (def) {
+        inner =
+          (def.icon ? '<img src="' + UI.esc(def.icon) + '" alt="">' : "") +
+          '<button type="button" class="farm-slot-x" data-clear-skill="' + i +
+          '" onclick="event.stopPropagation();App.setFarmSkill(' + i + ',null)" title="ลบ">×</button>';
+      } else {
+        inner = "<em>[ ]</em>";
+      }
+      slots +=
+        '<div class="farm-skill-slot farm-slot' + (sid ? "" : " empty") +
+        '" data-slot="' + i + '" data-filled="' + (sid ? "1" : "0") +
+        '" data-skill="' + UI.esc(sid || "") +
+        '" title="' + UI.esc(def ? def.name : "ว่าง") + '">' +
+        inner +
+        "</div>";
+    }
+    var potRows = "";
+    for (i = 0; i < 3; i++) {
+      var pot = cfg.pots[i] || { id: null, when: "hp", pct: 40 };
+      var opts = '<option value="">ว่าง</option>' + DATA.POTION_ORDER.map(function (id) {
+        var it = DATA.POTIONS[id];
+        var n = PVE.potionCount(save, id);
+        var sel = pot.id === id ? " selected" : "";
+        var dis = n < 1 && pot.id !== id ? " disabled" : "";
+        return '<option value="' + UI.esc(id) + '"' + sel + dis + ">" +
+          UI.esc((it.emoji || "") + " " + it.name) + " ×" + n + "</option>";
+      }).join("");
+      potRows +=
+        '<div class="farm-pot-row" data-farm-pot="' + i + '">' +
+        '<span class="farm-pot-lab">ช่อง ' + (i + 1) + "</span>" +
+        '<select class="ro-input farm-pot-id">' + opts + "</select>" +
+        '<label><input type="radio" name="farm-when-' + i + '" value="hp"' +
+        (pot.when !== "mp" ? " checked" : "") + "> HP</label>" +
+        '<label><input type="radio" name="farm-when-' + i + '" value="mp"' +
+        (pot.when === "mp" ? " checked" : "") + "> MP</label>" +
+        '<label>ใช้เมื่อต่ำกว่า <input type="number" class="ro-input farm-pot-pct" min="1" max="99" value="' +
+        pot.pct + '"> %</label>' +
+        "</div>";
+    }
+    return (
+      '<div class="farm-win-body">' +
+      '<div class="farm-on-row">' +
+      '<label><input type="checkbox"' + (farmOn ? " checked" : "") +
+      ' onchange="App.setAutoFarm(this.checked)"> <b>เปิด Auto Farm</b></label>' +
+      '<span class="farm-on-flag">' + (farmOn ? "ON" : "OFF") + "</span>" +
+      "</div>" +
+      " <h3>นั่งพัก</h3>" +
+      '<div class="farm-sit-row">' +
+      '<label><input type="checkbox"' + (cfg.sitHpOn ? " checked" : "") +
+      ' onchange="App.setFarmSit({sitHpOn:this.checked})"> HP</label>' +
+      '<label>นั่งเมื่อ HP ต่ำกว่า <input type="number" min="1" max="99" value="' +
+      cfg.sitHp +
+      '" class="ro-input farm-num" onchange="App.setFarmSit({sitHp:this.value})"> %</label>' +
+      "</div>" +
+      '<div class="farm-sit-row">' +
+      '<label><input type="checkbox"' + (cfg.sitMpOn ? " checked" : "") +
+      ' onchange="App.setFarmSit({sitMpOn:this.checked})"> MP</label>' +
+      '<label>นั่งเมื่อ MP ต่ำกว่า <input type="number" min="1" max="99" value="' +
+      cfg.sitMp +
+      '" class="ro-input farm-num" onchange="App.setFarmSit({sitMp:this.value})"> %</label>' +
+      "</div>" +
+      " <h3>สกิลฟาร์ม (ลากได้ 4 ช่อง)</h3>" +
+      '<div class="farm-skill-pal">' + pal + "</div>" +
+      '<div class="farm-skill-row">' + slots + "</div>" +
+      " <h3>ยาออโต้</h3>" +
+      '<div class="farm-pots">' + potRows + "</div>" +
+      "</div>"
+    );
+  };
+
+  UI.bindFarmDrag = function (root) {
+    if (!root) return;
+    var pals = root.querySelectorAll(".farm-pal-skill");
+    var slots = root.querySelectorAll(".farm-skill-slot");
+    pals.forEach(function (el) {
+      el.addEventListener("dragstart", function (ev) {
+        var id = el.getAttribute("data-skill") || "";
+        if (ev.dataTransfer) {
+          ev.dataTransfer.setData("text/plain", id);
+          ev.dataTransfer.effectAllowed = "copy";
+        }
+        if (typeof App !== "undefined") {
+          App._farmDragSkill = id;
+          App._farmDragFromSlot = null;
+          App._droppedFarm = false;
+        }
+      });
+    });
+    slots.forEach(function (slot) {
+      slot.addEventListener("dragover", function (ev) {
+        ev.preventDefault();
+        slot.classList.add("drag-over");
+      });
+      slot.addEventListener("dragleave", function () {
+        slot.classList.remove("drag-over");
+      });
+      slot.addEventListener("drop", function (ev) {
+        ev.preventDefault();
+        slot.classList.remove("drag-over");
+        var id = (ev.dataTransfer && ev.dataTransfer.getData("text/plain")) ||
+          (typeof App !== "undefined" && App._farmDragSkill) || "";
+        var idx = Number(slot.getAttribute("data-slot"));
+        if (typeof App !== "undefined") {
+          App._droppedFarm = true;
+          App.setFarmSkill(idx, id || null);
+        }
+      });
+      slot.addEventListener("click", function (ev) {
+        if (ev.target && ev.target.getAttribute && ev.target.getAttribute("data-clear-skill") != null) {
+          return;
+        }
+        if (typeof App !== "undefined" && App._farmPickedSkill) {
+          App.setFarmSkill(Number(slot.getAttribute("data-slot")), App._farmPickedSkill);
+          App._farmPickedSkill = null;
+        }
+      });
+      if (slot.getAttribute("data-filled") === "1") {
+        slot.setAttribute("draggable", "true");
+        slot.addEventListener("dragstart", function (ev) {
+          var id = slot.getAttribute("data-skill") || "";
+          if (ev.dataTransfer) ev.dataTransfer.setData("text/plain", id);
+          if (typeof App !== "undefined") {
+            App._farmDragSkill = id;
+            App._farmDragFromSlot = Number(slot.getAttribute("data-slot"));
+            App._droppedFarm = false;
+          }
+        });
+        slot.addEventListener("dragend", function () {
+          if (typeof App === "undefined") return;
+          if (!App._droppedFarm && App._farmDragFromSlot != null) {
+            App.setFarmSkill(App._farmDragFromSlot, null);
+          }
+          App._farmDragFromSlot = null;
+          App._farmDragSkill = null;
+          App._droppedFarm = false;
+        });
+      }
+    });
+    root.querySelectorAll("[data-farm-pot]").forEach(function (row) {
+      var idx = Number(row.getAttribute("data-farm-pot"));
+      function apply() {
+        var idEl = row.querySelector(".farm-pot-id");
+        var pctEl = row.querySelector(".farm-pot-pct");
+        var whenEl = row.querySelector("input[type=radio]:checked");
+        if (typeof App !== "undefined") {
+          App.setFarmPot(idx, {
+            id: idEl && idEl.value ? idEl.value : null,
+            when: whenEl ? whenEl.value : "hp",
+            pct: pctEl ? pctEl.value : 40,
+          });
+        }
+      }
+      row.querySelectorAll("select, input").forEach(function (inp) {
+        inp.addEventListener("change", apply);
+      });
+    });
+  };
+
+  UI.invWin = function (save) {
+    PVE.ensureProgress(save);
+    var tab = UI._invTab || "use";
+    var ws = PVE.weightState(save);
+    var wr = ws.ratio != null ? ws.ratio : (ws.max ? ws.cur / ws.max : 0);
+    var wcls = wr >= 1 ? " full" : wr >= 0.9 ? " over" : wr >= 0.7 ? " heavy" : "";
+    var wline = '<div class="hud-weight' + wcls + '">น้ำหนัก <b>' + Math.floor(ws.cur) + "</b> / " + ws.max + " g</div>";
+    var tabs =
+      '<div class="inv-tabs">' +
+      '<button type="button" class="ro-btn' + (tab === "use" ? " on" : "") +
+      '" data-tab="use" onclick="App.setInvTab(this.dataset.tab)">ใช้ / ยา</button>' +
+      '<button type="button" class="ro-btn' + (tab === "equip" ? " on" : "") +
+      '" data-tab="equip" onclick="App.setInvTab(this.dataset.tab)">สวมใส่</button>' +
+      '<button type="button" class="ro-btn' + (tab === "mat" ? " on" : "") +
+      '" data-tab="mat" onclick="App.setInvTab(this.dataset.tab)">วัสดุ</button>' +
+      "</div>";
+    var grid = "";
+    if (tab === "use") {
+      grid = DATA.POTION_ORDER.map(function (id) {
+        var it = DATA.POTIONS[id];
+        var n = PVE.potionCount(save, id);
+        var remain = PVE.potionBuffRemainMs(save, id);
+        var remainTxt = remain > 0 ? '<small class="inv-remain">เหลือ ' + PVE.fmtRemain(remain) + "</small>" : "";
+        return (
+          '<button type="button" class="ro-slot inv-slot' + (n ? "" : " empty") +
+          '" data-id="' + UI.esc(id) + '" ' +
+          (n ? 'onclick="App.usePotion(this.dataset.id)"' : "disabled") +
+          ">" +
+          '<span class="inv-emoji">' + (it.emoji || "") + "</span>" +
+          "<b>" + UI.esc(it.name) + "</b>" +
+          "<small>×" + n + " · " + DATA.itemWeight(id) + "g</small>" +
+          remainTxt +
+          (n ? "<em>ใช้</em>" : "") +
+          "</button>"
+        );
+      }).join("");
+    } else if (tab === "equip") {
+      var ownedIds = Object.keys(DATA.ITEMS).filter(function (id) { return save.owned && save.owned[id]; });
+      if (!ownedIds.length) {
+        grid = '<p class="hint">ยังไม่มีอุปกรณ์</p>';
+      } else {
+        grid = ownedIds.map(function (id) {
+          var it = DATA.ITEMS[id];
+          var worn = (DATA.SLOTS || []).some(function (sl) { return save.equip && save.equip[sl.id] === id; });
+          var slotName = UI.slotTypeLabel(it);
+          return (
+            '<button type="button" class="ro-slot inv-slot' + (worn ? " equipped" : "") +
+            '" data-id="' + UI.esc(it.id) +
+            '" onclick="App.toggleInvItem(this.dataset.id)">' +
+            "<b>" + UI.esc(it.name) + "</b>" +
+            "<small>" + UI.esc(slotName) + " · " + DATA.itemWeight(it) + "g</small>" +
+            (worn ? '<em class="inv-badge on">ใส่อยู่</em>' : "") +
+            "</button>"
+          );
+        }).join("");
+      }
+    } else {
+      save.materials = save.materials || {};
+      var matIds = Object.keys(DATA.MATERIALS || {});
+      Object.keys(save.materials).forEach(function (id) {
+        if (matIds.indexOf(id) < 0) matIds.push(id);
+      });
+      var any = matIds.some(function (id) { return (save.materials[id] || 0) > 0; });
+      if (!any) {
+        grid = '<p class="hint">ยังไม่มีวัสดุ</p>';
+      } else {
+        grid = matIds.map(function (id) {
+          var def = (DATA.MATERIALS && DATA.MATERIALS[id]) || { name: id, emoji: "◇" };
+          var n = save.materials[id] || 0;
+          return (
+            '<div class="ro-slot inv-slot' + (n ? "" : " empty") + '">' +
+            '<span class="inv-emoji">' + (def.emoji || "") + "</span>" +
+            "<b>" + UI.esc(def.name) + "</b>" +
+            "<small>×" + n + " · " + DATA.itemWeight(id) + "g</small></div>"
+          );
+        }).join("");
+      }
+    }
+    return wline + tabs + '<div class="inv-grid">' + grid + "</div>";
+  };
+
   UI.openCityWin = function (kind, save) {
     const titles = {
       equip: "สวมใส่อุปกรณ์",
@@ -1467,6 +1855,9 @@
       potions: "ร้านยา",
       skills: "SKILL",
       status: "STATUS",
+      save: "SAVE",
+      farm: "AUTO FARM",
+      inv: "INVENTORY / กระเป๋า",
     };
     if (!titles[kind]) return;
     UI._cityWinKind = kind;
@@ -1493,6 +1884,12 @@
         refine: save.refine,
         blurb: "แจกแต้มสถานะ — ไม่บังคับแจกครบ",
       });
+    } else if (kind === "save") {
+      inner = UI.saveForm(save);
+    } else if (kind === "farm") {
+      inner = UI.farmWin(save);
+    } else if (kind === "inv") {
+      inner = UI.invWin(save);
     }
     overlay.innerHTML =
       '<div class="ro-win city-win city-win-' + kind + '">' +
@@ -1507,6 +1904,7 @@
       if (ev.target === overlay) App.closeCityWin();
     };
     UI.bindCityWinDrag(overlay.querySelector(".city-win"), kind);
+    if (kind === "farm") UI.bindFarmDrag(overlay.querySelector(".city-win-farm") || overlay);
   };
 
   UI._cityWinPos = UI._cityWinPos || {};
@@ -1565,34 +1963,7 @@
   };
 
   UI.openBag = function (save) {
-    PVE.ensureProgress(save);
-    let overlay = document.getElementById("bag-overlay");
-    if (!overlay) {
-      overlay = document.createElement("div");
-      overlay.id = "bag-overlay";
-      document.body.appendChild(overlay);
-    }
-    const rows = DATA.POTION_ORDER.map(function (id) {
-      const it = DATA.POTIONS[id];
-      const n = PVE.potionCount(save, id);
-      const remain = PVE.potionBuffRemainMs(save, id);
-      const remainTxt = remain > 0 ? " · เหลือ " + PVE.fmtRemain(remain) : "";
-      return (
-        '<div class="item-row"><div><b>' + it.emoji + " " + it.name +
-        "</b><div class=\"item-bon\">" + it.desc + " · มี " + n +
-        remainTxt +
-        '</div></div><button type="button" class="btn small gold" ' +
-        (n ? 'onclick="App.usePotion(\'' + id + "')\"" : "disabled") +
-        ">ใช้</button></div>"
-      );
-    }).join("");
-    overlay.innerHTML =
-      '<div class="bag-card"><h3>กระเป๋ายา</h3>' + rows +
-      '<button type="button" class="btn ghost wide" onclick="App.closeBag()">ปิด</button></div>';
-    overlay.className = "show";
-    overlay.onclick = function (ev) {
-      if (ev.target === overlay) App.closeBag();
-    };
+    UI.openCityWin("inv", save);
   };
 
   UI.closeBag = function () {

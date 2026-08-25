@@ -40,6 +40,10 @@ function dummy(partial) {
       critMult: 50,
       dodge: 0,
       accuracy: 100,
+      hit: 175,
+      flee: 100,
+      perfectDodge: 0,
+      fleeSkillBonus: 0,
       weakenTurns: 0,
       focusTurns: 0,
       rageTurns: 0,
@@ -183,11 +187,11 @@ console.log("weaken -20% outgoing");
   assert(r.damage === 80, "weaken 100 -> 80, got " + r.damage);
 }
 
-console.log("hit chance = accuracy - dodge");
+console.log("hit chance uses HIT − actual FLEE (legacy accuracy−dodge retired)");
 {
-  const atk = dummy({ accuracy: 120 });
-  const tgt = dummy({ dodge: 20, isHero: false });
-  assert(COMBAT.hitChance(atk, tgt) === 100, "120-20=100");
+  const atk = dummy({ hit: 373, accuracy: 120 });
+  const tgt = dummy({ flee: 239, dodge: 20, isHero: false });
+  assert(COMBAT.hitChance(atk, tgt) === 100, "HIT 373 − FLEE 239 clamp 100");
 }
 
 console.log("caps");
@@ -341,10 +345,14 @@ console.log("blade_storm two hits / rain three hits");
   bd.softDef = 0;
   bd.mdef = 0;
   bd.dodge = 0;
+  bd.flee = 0;
+  bd.perfectDodge = 0;
   const boss = COMBAT.createUnit(bd, "right");
   boss.def = 0;
   boss.softDef = 0;
   boss.dodge = 0;
+  boss.flee = 0;
+  boss.perfectDodge = 0;
   const st = COMBAT.createState(hero, boss, { seed: 1 });
   st.rng = hitOnly();
   hero.mp = 200;
@@ -360,6 +368,8 @@ console.log("blade_storm two hits / rain three hits");
   boss2.def = 0;
   boss2.softDef = 0;
   boss2.dodge = 0;
+  boss2.flee = 0;
+  boss2.perfectDodge = 0;
   const st2 = COMBAT.createState(hunter, boss2, { seed: 1 });
   st2.rng = hitOnly();
   hunter.mp = 200;
@@ -400,10 +410,11 @@ console.log("prontera + field connectivity");
   assert(spawn.x === 40 && spawn.y === 51, "spawn at 40,51, got " + spawn.x + "," + spawn.y);
   assert(cg.cells["24,40"] === "W", "weapon cell 24,40 is W, got " + cg.cells["24,40"]);
   assert(cg.cells["56,40"] === "P", "potion cell 56,40 is P, got " + cg.cells["56,40"]);
-  assert(cg.cells["38,49"] === "S", "kafra cell 38,49 is S, got " + cg.cells["38,49"]);
+  const kafraAt = findCell("S");
+  assert(kafraAt && MAP.isWalkable(kafraAt.x, kafraAt.y), "kafra S on a walkable tile, got " + (kafraAt ? kafraAt.x + "," + kafraAt.y : "none"));
   assert(cg.cells["40,16"] === "K" && MAP.isWalkable(40, 16), "castle K at 40,16 walkable");
   assert(cg.cells["78,40"] === "G" && MAP.isWalkable(78, 40), "gate G at 78,40 walkable");
-  [["weapon", 24, 40], ["potion", 56, 40], ["kafra", 38, 49], ["castle", 40, 16], ["gate", 78, 40]].forEach(function (row) {
+  [["weapon", 24, 40], ["potion", 56, 40], ["kafra", kafraAt.x, kafraAt.y], ["castle", 40, 16], ["gate", 78, 40]].forEach(function (row) {
     const at = { x: row[1], y: row[2] };
     assert(MAP.isWalkable(at.x, at.y), row[0] + " walkable");
     const path = MAP.path(spawn, at);
@@ -682,6 +693,7 @@ console.log("refine persist + safe fail");
   const save = PVE.createSave("warrior", DATA.emptyAllocated());
   save.owned.helm_leather = true;
   save.zeno = 10000;
+  save.materials = { ore_phracon: 5, ore_elunium: 5, ore_oridecon: 5 };
   const failRng = { chance: function () { return false; } };
   const winRng = { chance: function () { return true; } };
   const r1 = PVE.attemptRefine(save, "helm_leather", winRng);
@@ -703,7 +715,7 @@ console.log("boss hardDef is 0");
   const b = STATS.computeBossStats(DATA.BOSSES[0]);
   assert(b.hardDef === 0 && b.hardMdef === 0 && b.softDef === b.def, "boss soft=def hard=0");
   const m = STATS.computeMonsterStats(DATA.findMonster("poring"));
-  assert(m.hardDef === 0 && m.softDef === m.def, "monster hard=0");
+  assert(m.hardDef === 0 && m.hardMdef === 0 && m.softDef === 2 && m.softMdef === 1, "poring Soft DEF 2 / Soft MDEF 1 / Hard 0");
 }
 
 console.log("lv10-20 field pack + wolf namespace");
@@ -814,6 +826,74 @@ console.log("lv10-20 field pack + wolf namespace");
   MAP.setZone("bosses");
 }
 
+console.log("field monster drops + refine ore");
+{
+  assert(!!DATA.MATERIALS.ore_phracon && DATA.MATERIALS.ore_phracon.name === "แร่ไฟคอน", "ore_phracon Thai name");
+  assert(!!DATA.MATERIALS.ore_elunium && DATA.MATERIALS.ore_elunium.name === "เอลูเนียม", "ore_elunium Thai name");
+  assert(!!DATA.MATERIALS.ore_oridecon && DATA.MATERIALS.ore_oridecon.name === "โอริเดคอน", "ore_oridecon Thai name");
+
+  const banned = { helm_abyss: 1, armor_ruin: 1, weapon_void: 1, acc_triad: 1 };
+  DATA.MONSTERS.forEach(function (m) {
+    assert(m.drops && m.drops.length === 3, m.id + " has exactly 3 drops");
+    const byKind = {};
+    m.drops.forEach(function (d) {
+      byKind[d.kind] = d;
+      assert(d && d.kind && d.id && d.chance != null, m.id + " drop row shape");
+    });
+    assert(byKind.material && byKind.material.chance === 5, m.id + " material 5%");
+    assert(byKind.item && byKind.item.chance === 1, m.id + " item 1%");
+    assert(byKind.potion && (byKind.potion.chance === 3 || byKind.potion.chance === 4), m.id + " potion 3 or 4");
+    assert(!banned[byKind.item.id], m.id + " wearable is not high-tier " + (byKind.item && byKind.item.id));
+  });
+
+  const win = { chance: function () { return true; } };
+  const saveNo = PVE.createSave("warrior", DATA.emptyAllocated());
+  saveNo.owned.helm_leather = true;
+  saveNo.zeno = 5000;
+  const zNo = saveNo.zeno;
+  const noOre = PVE.attemptRefine(saveNo, "helm_leather", win);
+  assert(!noOre.ok && noOre.reason === "แร่ไม่พอ", "+1 helm without phracon → แร่ไม่พอ");
+  assert(saveNo.zeno === zNo, "no ore leaves zeno unchanged");
+
+  saveNo.materials.ore_phracon = 2;
+  const plus1 = PVE.attemptRefine(saveNo, "helm_leather", win);
+  assert(plus1.ok && plus1.success && saveNo.refine.helm_leather === 1, "+1 helm with phracon succeeds");
+  assert(saveNo.materials.ore_phracon === 1, "+1 helm spends 1 phracon");
+
+  const saveHelm = PVE.createSave("warrior", DATA.emptyAllocated());
+  saveHelm.owned.helm_leather = true;
+  saveHelm.refine.helm_leather = 4;
+  saveHelm.zeno = 10000;
+  saveHelm.materials = { ore_phracon: 5, ore_elunium: 3, ore_oridecon: 4 };
+  const helm5 = PVE.attemptRefine(saveHelm, "helm_leather", win);
+  assert(helm5.ok && helm5.success && saveHelm.refine.helm_leather === 5, "+5 helm succeeds");
+  assert(saveHelm.materials.ore_elunium === 2, "+5 helm spends elunium");
+  assert(saveHelm.materials.ore_oridecon === 4, "+5 helm does not spend oridecon");
+  assert(saveHelm.materials.ore_phracon === 5, "+5 helm does not spend phracon");
+
+  const saveWep = PVE.createSave("warrior", DATA.emptyAllocated());
+  saveWep.owned.weapon_short = true;
+  saveWep.refine.weapon_short = 4;
+  saveWep.zeno = 10000;
+  saveWep.materials = { ore_phracon: 5, ore_elunium: 3, ore_oridecon: 4 };
+  const wep5 = PVE.attemptRefine(saveWep, "weapon_short", win);
+  assert(wep5.ok && wep5.success && saveWep.refine.weapon_short === 5, "+5 weapon succeeds");
+  assert(saveWep.materials.ore_oridecon === 3, "+5 weapon spends oridecon");
+  assert(saveWep.materials.ore_elunium === 3, "+5 weapon does not spend elunium");
+
+  const dropSave = PVE.createSave("warrior", DATA.emptyAllocated());
+  const red0 = dropSave.potions.red || 0;
+  const always = { next: function () { return 0; }, chance: function () { return true; } };
+  const r1 = PVE.applyFieldRewards(dropSave, "poring", always);
+  assert(dropSave.potions.red === red0 + 1, "poring always-true red++");
+  assert(dropSave.materials.ore_phracon === 1, "poring always-true ore_phracon++");
+  assert(dropSave.owned.helm_leather === true, "poring always-true owned helm_leather");
+  assert(r1.loot && r1.loot.indexOf("red") >= 0 && r1.loot.indexOf("ore_phracon") >= 0 && r1.loot.indexOf("helm_leather") >= 0, "poring loot lists all 3 ids");
+  PVE.applyFieldRewards(dropSave, "poring", always);
+  assert(dropSave.owned.helm_leather === true, "second apply owned stays true");
+  assert(dropSave.potions.red === red0 + 2, "second apply red++ again");
+  assert(dropSave.materials.ore_phracon === 2, "second apply phracon++ again");
+}
 
 console.log("charName + first-run name lock");
 {
@@ -991,6 +1071,9 @@ console.log("audio helper");
   const AUDIO = ctx.AUDIO;
   assert(!!AUDIO, "AUDIO exists");
   assert(AUDIO.sfxUrl("hit_slash") === "assets/sfx/hit_slash.ogg", "hit_slash path");
+  assert(AUDIO.sfxUrl("ui_refine_hit") === "assets/sfx/ui_refine_hit.ogg", "refine hit path");
+  assert(AUDIO.sfxUrl("ui_refine_ok") === "assets/sfx/ui_refine_ok.ogg", "refine ok path");
+  assert(AUDIO.sfxUrl("ui_refine_fail") === "assets/sfx/ui_refine_fail.ogg", "refine fail path");
   assert(AUDIO.bgmUrl("city") === "assets/bgm/city.ogg", "city bgm path");
   assert(AUDIO.bgmUrl("field") === "assets/bgm/field.ogg", "field bgm path");
   assert(AUDIO.isMeleeHero("warrior") === true, "warrior melee");
@@ -1105,6 +1188,468 @@ console.log("weapon catalog v1");
   save.equip.weapon = "weapon_short";
   PVE.ensureProgress(save);
   assert(save.equip.weapon == null, "hunter sword stripped");
+}
+
+
+console.log("username save/load");
+{
+  if (typeof ctx.localStorage === "undefined") {
+    const mem = {};
+    const ls = {
+      getItem(k) { return mem[k] || null; },
+      setItem(k, v) { mem[k] = String(v); },
+      removeItem(k) { delete mem[k]; },
+    };
+    ctx.localStorage = ls;
+    if (typeof global !== "undefined" && typeof global.localStorage === "undefined") {
+      global.localStorage = ls;
+    }
+  }
+  assert(PVE.validateUsername("สมชาย").ok === true, "Thai username ok");
+  assert(PVE.validateUsername("hero_01").ok === true, "latin+digit+_ username ok");
+  assert(PVE.validateUsername("").ok === false, "empty username rejected");
+  assert(PVE.validateUsername("   ").ok === false, "whitespace username rejected");
+  assert(PVE.validateUsername("---").ok === false, "punctuation-only username rejected");
+  const thai24 = "กขคงจฉชซฌญฎฏฐฑฒณดตถทนบปผ";
+  assert(PVE.countNameChars(thai24) === 24, "24 Thai graphemes for username");
+  assert(PVE.validateUsername(thai24).ok === true, "24 Thai username accepted");
+  assert(PVE.validateUsername(thai24 + "ร").ok === false, ">24 username rejected");
+  const save = PVE.createSave("warrior", DATA.emptyAllocated(), "นักรบทดสอบ");
+  save.baseLevel = 7;
+  save.jobLevel = 3;
+  save.zeno = 123;
+  const wr = PVE.writeAccount("ผู้เล่น1", save);
+  assert(wr.ok === true && wr.name === "ผู้เล่น1", "writeAccount ok");
+  const loaded = PVE.readAccount("ผู้เล่น1");
+  assert(!!loaded, "readAccount found");
+  assert(loaded.charName === "นักรบทดสอบ", "readAccount charName");
+  assert(loaded.heroId === "warrior", "readAccount heroId");
+  assert(loaded.baseLevel === 7 && loaded.jobLevel === 3, "readAccount levels");
+  assert(loaded.username === "ผู้เล่น1", "readAccount username");
+  const listed = PVE.listAccounts();
+  assert(listed.some(function (a) { return a.username === "ผู้เล่น1" && a.charName === "นักรบทดสอบ"; }), "listAccounts includes saved");
+  assert(PVE.lastUsername() === "ผู้เล่น1", "lastUsername remembered");
+  assert(PVE.readAccount("ไม่มีคนนี้") === null, "missing username is null");
+  assert(PVE.writeAccount("", save).ok === false, "writeAccount empty rejected");
+}
+
+console.log("locked HIT / FLEE / Perfect Dodge book examples");
+{
+  assert(STATS.playerHit(99, 99, 1, 0) === 373, "Lv99 DEX99 LUK1 HIT 373, got " + STATS.playerHit(99, 99, 1, 0));
+  assert(STATS.playerFlee(99, 99, 1, 0) === 298, "Lv99 AGI99 LUK1 FLEE 298, got " + STATS.playerFlee(99, 99, 1, 0));
+  assert(almost(STATS.perfectDodge(1, 0), 1.1), "LUK1 PD 1.1, got " + STATS.perfectDodge(1, 0));
+
+  const heroHit = STATS.computeHeroStats("warrior", { str: 0, vit: 0, int: 0, agi: 0, dex: 99, luk: 1 }, DATA.emptyEquip(), 99);
+  assert(heroHit.hit === 373, "computeHeroStats HIT 373, got " + heroHit.hit);
+  const heroFlee = STATS.computeHeroStats("warrior", { str: 0, vit: 0, int: 0, agi: 99, dex: 0, luk: 1 }, DATA.emptyEquip(), 99);
+  assert(heroFlee.flee === 298, "computeHeroStats FLEE 298, got " + heroFlee.flee);
+  assert(almost(heroFlee.perfectDodge, 1.1), "computeHeroStats PD 1.1, got " + heroFlee.perfectDodge);
+
+  const luk1 = STATS.computeHeroStats("warrior", { str: 0, vit: 0, int: 0, agi: 99, dex: 99, luk: 1 }, DATA.emptyEquip(), 99);
+  assert(luk1.hit === 373 && luk1.flee === 298 && almost(luk1.perfectDodge, 1.1), "Lv99 DEX99/AGI99 LUK1 book row HIT 373 FLEE 298 PD 1.1, got " + luk1.hit + "/" + luk1.flee + "/" + luk1.perfectDodge);
+
+
+  const mob40Flee = STATS.monsterFlee(99, 40);
+  assert(mob40Flee === 239, "mob Lv99 AGI40 FLEE 239, got " + mob40Flee);
+  assert(STATS.hitChance(373, 239) === 100, "vs AGI40 HitChance 100, got " + STATS.hitChance(373, 239));
+
+  const mob99Flee = STATS.monsterFlee(99, 99);
+  assert(mob99Flee === 298, "mob Lv99 AGI99 FLEE 298, got " + mob99Flee);
+  assert(STATS.hitChance(373, 298) === 75, "vs AGI99 HitChance 75, got " + STATS.hitChance(373, 298));
+
+  const mobHit50 = STATS.monsterHit(99, 50);
+  assert(mobHit50 === 319, "mob Lv99 DEX50 HIT 319, got " + mobHit50);
+  assert(STATS.hitChance(319, 298) === 21, "mob HIT 319 vs FLEE 298 → 21, got " + STATS.hitChance(319, 298));
+  assert(100 - STATS.hitChance(319, 298) === 79, "dodge chance 79");
+
+  const mobHit99 = STATS.monsterHit(99, 99);
+  assert(mobHit99 === 368, "mob Lv99 DEX99 HIT 368, got " + mobHit99);
+  assert(STATS.hitChance(368, 298) === 70, "mob HIT 368 vs FLEE 298 → 70, got " + STATS.hitChance(368, 298));
+
+  const act4 = STATS.actualFlee(298, 0, 4);
+  assert(almost(act4, 258.4), "surround 4 actual FLEE 258.4, got " + act4);
+  const hc4 = STATS.hitChance(319, act4);
+  assert(almost(hc4, 60.6), "surround 4 vs HIT 319 HitChance 60.6 (not 61), got " + hc4);
+
+  const act6 = STATS.actualFlee(298, 0, 6);
+  assert(almost(act6, 218.8), "surround 6 actual FLEE 218.8, got " + act6);
+  assert(STATS.hitChance(319, act6) === 100, "surround 6 vs HIT 319 HitChance 100, got " + STATS.hitChance(319, act6));
+
+  assert(almost(STATS.actualFlee(298, 0, 1), 298), "surround 1 no shrink");
+  assert(almost(STATS.actualFlee(298, 0, 2), 298), "surround 2 no shrink");
+  assert(almost(STATS.actualFlee(298, 7, 12), 107), "12+ mobs: 100 + SkillBonus 7");
+  assert(almost(STATS.actualFlee(298, 7, 4), 265.4), "surround 4 SkillBonus outside shrink: 100+7+198*0.8");
+
+  const mob = STATS.computeMonsterStats({ id: "x", name: "x", emoji: "x", color: "#000", level: 99, agi: 40, dex: 50, hp: 1, mp: 0, atk: 1, matk: 0, def: 0, mdef: 0, crit: 0, critMult: 50, skills: [] });
+  assert(mob.hit === 319 && mob.flee === 239 && mob.perfectDodge === 0, "computeMonsterStats HIT/FLEE/PD from lv+dex+agi");
+
+  const bossPd = STATS.computeBossStats(Object.assign({}, DATA.BOSSES[0], { level: 10, dex: 5, agi: 8, perfectDodge: 3.5 }));
+  assert(bossPd.hit === 185 && bossPd.flee === 118 && almost(bossPd.perfectDodge, 3.5), "boss explicit PD, HIT/FLEE from lv+dex+agi");
+
+  const missing = STATS.computeMonsterStats({ id: "y", name: "y", emoji: "y", color: "#000", level: 1, hp: 1, mp: 0, atk: 1, matk: 0, def: 0, mdef: 0, crit: 0, critMult: 50, skills: [] });
+  assert(missing.hit === 171 && missing.flee === 101 && missing.perfectDodge === 0, "missing agi/dex count as 0");
+
+  const book = [
+    ["poring", 175, 106, 2, 1, 0, 0],
+    ["fabre", 177, 108, 5, 2, 1, 0],
+    ["lunatic", 180, 116, 3, 2, 0, 0],
+    ["willow", 179, 107, 7, 8, 8, 6],
+    ["condor", 184, 115, 4, 3, 2, 0],
+    ["wolf", 198, 132, 13, 7, 8, 2],
+    ["poporing", 193, 123, 15, 16, 4, 8],
+    ["chonchon", 202, 148, 11, 9, 2, 4],
+    ["roda_frog", 195, 121, 25, 10, 22, 5],
+    ["spore", 198, 124, 15, 25, 6, 12],
+    ["rocker", 211, 147, 14, 12, 6, 4],
+    ["steel_chonchon", 206, 144, 20, 12, 48, 8],
+    ["savage_babe", 203, 133, 22, 10, 18, 3],
+    ["elder_willow", 202, 126, 24, 29, 20, 22],
+    ["skeleton", 212, 134, 23, 14, 30, 6],
+  ];
+  book.forEach(function (row) {
+    const def = DATA.findMonster(row[0]);
+    assert(def.str != null && def.agi != null && def.vit != null && def.int != null && def.dex != null && def.luk != null, row[0] + " has primaries");
+    const st = STATS.computeMonsterStats(def);
+    assert(st.hit === row[1], row[0] + " HIT " + row[1] + " got " + st.hit);
+    assert(st.flee === row[2], row[0] + " FLEE " + row[2] + " got " + st.flee);
+    assert(st.softDef === row[3], row[0] + " SoftDEF " + row[3] + " got " + st.softDef);
+    assert(st.softMdef === row[4], row[0] + " SoftMDEF " + row[4] + " got " + st.softMdef);
+    assert(st.hardDef === row[5], row[0] + " HardDEF " + row[5] + " got " + st.hardDef);
+    assert(st.hardMdef === row[6], row[0] + " HardMDEF " + row[6] + " got " + st.hardMdef);
+  });
+  assert(STATS.monsterSoftMdef(2, 1) === 1 && STATS.monsterSoftMdef(36, 14) === 25, "monsterSoftMdef floor((INT+lv)/2)");
+
+  const unit = COMBAT.createUnit(heroHit, "left");
+  assert(unit.hit === 373 && unit.flee === heroHit.flee && almost(unit.perfectDodge, heroHit.perfectDodge), "createUnit copies HIT/FLEE/PD");
+
+  const mage = dummy({ hit: 1, matk: 100, crit: 100 });
+  const tgt = dummy({ flee: 999, perfectDodge: 100, isHero: false });
+  const always = { chance: function () { return true; } };
+  const mag = COMBAT.rollConnect(mage, tgt, always, { atkRatio: 0, matkRatio: 1 });
+  assert(mag.hit === true && mag.crit === false && mag.pd === false, "magic skips PD/FLEE/crit connect");
+
+  const physPd = COMBAT.rollConnect(dummy({ hit: 400, crit: 100, isHero: true }), tgt, always, { atkRatio: 1, matkRatio: 0 });
+  assert(physPd.hit === false && physPd.pd === true, "PD first even if would crit");
+
+  const never = { chance: function () { return false; } };
+  const critConn = COMBAT.rollConnect(dummy({ hit: 1, crit: 100, isHero: true }), dummy({ flee: 999, perfectDodge: 0, isHero: false }), { chance: function (p) { return p >= 100; } }, { atkRatio: 1, forceCrit: true });
+  assert(critConn.hit === true && critConn.crit === true, "crit skips FLEE");
+
+  const fleeConn = COMBAT.rollConnect(dummy({ hit: 319, crit: 0, isHero: false }), dummy({ flee: 298, perfectDodge: 0, isHero: true }), never, { atkRatio: 1, surround: 1 });
+  assert(fleeConn.hit === false && fleeConn.crit === false, "HitChance 21 with never-rng misses");
+
+  const s4 = STATS.actualFlee(298, 0, 4);
+  assert(almost(COMBAT.hitChance(dummy({ hit: 319 }), dummy({ flee: 298, isHero: true }), false, 4), 60.6), "COMBAT.hitChance surround 4 = 60.6");
+
+  assert(COMBAT.surroundCount({}) === 1, "ATB default surround 1");
+  assert(COMBAT.surroundCount({ foes: [{ hp: 10 }, { hp: 10 }, { dead: true }, { hp: 0 }, { unit: { hp: 5 } }] }) === 3, "surroundCount living foes");
+
+  const gd = STATS.computeHeroStats("warrior", { str: 0, vit: 0, int: 0, agi: 0, dex: 0, luk: 0 }, DATA.emptyEquip(), 1);
+  assert(gd.gearDelta.hit === 0 && gd.gearDelta.flee === 0 && gd.gearDelta.perfectDodge === 0, "empty gearDelta includes hit/flee/PD");
+}
+
+console.log("auto farm cfg + inventory materials");
+{
+  const fresh = PVE.createSave("warrior", DATA.emptyAllocated());
+  assert(!!fresh.autoFarmCfg, "createSave has autoFarmCfg");
+  assert(fresh.autoFarmCfg.sitHp === 30 && fresh.autoFarmCfg.sitMp === 20, "createSave sit percents");
+  assert(Array.isArray(fresh.autoFarmCfg.skills) && fresh.autoFarmCfg.skills.length === 4, "createSave skills length 4");
+  assert(Array.isArray(fresh.autoFarmCfg.pots) && fresh.autoFarmCfg.pots.length === 3, "createSave pots length 3");
+  assert(fresh.materials && typeof fresh.materials === "object" && !Array.isArray(fresh.materials), "createSave materials {}");
+  assert(Object.keys(fresh.materials).length === 0, "createSave materials empty");
+
+  const bare = { heroId: "warrior" };
+  const cfg = PVE.ensureAutoFarmCfg(bare);
+  assert(cfg.sitHpOn === true && cfg.sitHp === 30 && cfg.sitMpOn === true && cfg.sitMp === 20, "ensureAutoFarmCfg fills sit defaults");
+  assert(cfg.skills.length === 4 && cfg.skills.every(function (x) { return x == null; }), "ensureAutoFarmCfg skills [null x4]");
+  assert(cfg.pots.length === 3 && cfg.pots[0].when === "hp" && cfg.pots[0].pct === 40, "ensureAutoFarmCfg pot0 hp 40");
+  assert(cfg.pots[1].when === "mp" && cfg.pots[1].pct === 20, "ensureAutoFarmCfg pot1 mp 20");
+  assert(cfg.pots[2].when === "hp" && cfg.pots[2].pct === 50, "ensureAutoFarmCfg pot2 hp 50");
+  bare.autoFarmCfg = { sitHp: 0, sitMp: 140, skills: ["attack"], pots: [{ id: "red", when: "hp", pct: 3 }] };
+  const clamped = PVE.ensureAutoFarmCfg(bare);
+  assert(clamped.sitHp === 1 && clamped.sitMp === 99, "ensureAutoFarmCfg clamps sit percents 1–99");
+  assert(clamped.skills.length === 4 && clamped.pots.length === 3, "ensureAutoFarmCfg pads skills/pots");
+
+  const save = PVE.createSave("warrior", DATA.emptyAllocated());
+  const unlearned = PVE.setFarmSkill(save, 0, "blade_storm");
+  assert(!unlearned.ok, "setFarmSkill rejects unlearned blade_storm");
+  const unknown = PVE.setFarmSkill(save, 0, "not_a_skill");
+  assert(!unknown.ok, "setFarmSkill rejects unknown skill");
+  const night = PVE.setFarmSkill(save, 0, "nightfall");
+  assert(!night.ok, "setFarmSkill rejects other-job skill");
+  const okSk = PVE.setFarmSkill(save, 0, "attack");
+  assert(okSk.ok && save.autoFarmCfg.skills[0] === "attack", "setFarmSkill accepts learned attack");
+  const clr = PVE.setFarmSkill(save, 0, null);
+  assert(clr.ok && save.autoFarmCfg.skills[0] == null, "setFarmSkill clears with null");
+
+  PVE.setFarmPot(save, 0, { id: "blue", when: "mp", pct: 200 });
+  assert(save.autoFarmCfg.pots[0].pct === 99, "setFarmPot clamps pct high to 99");
+  PVE.setFarmPot(save, 0, { id: "blue", when: "mp", pct: 0 });
+  assert(save.autoFarmCfg.pots[0].pct === 1, "setFarmPot clamps pct low to 1");
+  PVE.setFarmPot(save, 0, { id: "blue", when: "mp", pct: 50 });
+  assert(save.autoFarmCfg.pots[0].id === "blue" && save.autoFarmCfg.pots[0].when === "mp", "setFarmPot stores blue/mp");
+
+  save.potions = { red: 0, orange: 0, white: 0, blue: 1, berserk: 0 };
+  const unit = { hp: 100, maxHp: 100, mp: 10, maxMp: 100 };
+  const used = PVE.maybeAutoPotion(save, unit);
+  assert(used && used.ok && used.id === "blue", "maybeAutoPotion uses configured blue on low MP");
+  assert(save.potions.blue === 0, "configured blue consumed");
+
+  const oldSave = PVE.createSave("warrior", DATA.emptyAllocated());
+  oldSave.potions = { red: 1, orange: 0, white: 0, blue: 0, berserk: 0 };
+  const lowHp = { hp: 10, maxHp: 100, mp: 50, maxMp: 50 };
+  const fallback = PVE.maybeAutoPotion(oldSave, lowHp);
+  assert(fallback && fallback.id === "red", "maybeAutoPotion falls back to hardcoded orange/red/white when pots empty");
+
+  PVE.setFarmSit(save, { sitHpOn: true, sitHp: 40, sitMpOn: false, sitMp: 20 });
+  save.autoFarm = true;
+  const sitLow = { hp: 30, maxHp: 100, mp: 100, maxMp: 100 };
+  assert(PVE.shouldSit(save, sitLow) === true, "shouldSit true when hp below sitHp");
+  sitLow.hp = 50;
+  assert(PVE.shouldSit(save, sitLow) === false, "shouldSit false when hp above sitHp");
+  save.autoFarm = false;
+  sitLow.hp = 10;
+  assert(PVE.shouldSit(save, sitLow) === false, "shouldSit false when autoFarm off");
+
+  const noMat = {};
+  PVE.ensureProgress(noMat);
+  assert(noMat.materials && typeof noMat.materials === "object" && Object.keys(noMat.materials).length === 0, "materials default {}");
+  assert(!!DATA.MATERIALS.jellopy && DATA.MATERIALS.jellopy.name === "เจลลอปี้", "DATA.MATERIALS.jellopy");
+}
+
+console.log("auto farm sit regen + skill order");
+{
+  const WORLD = ctx.WORLD;
+  assert(!!WORLD && typeof WORLD.applySitRegen === "function", "WORLD.applySitRegen exported");
+  assert(WORLD.SIT_REGEN_MULT === 2, "sit regen labeled 2× stand");
+
+  const sitSave = PVE.createSave("warrior", DATA.emptyAllocated());
+  PVE.setFarmSit(sitSave, { sitHpOn: true, sitHp: 40, sitMpOn: false, sitMp: 20 });
+  sitSave.autoFarm = true;
+  const sitUnit = { hp: 30, maxHp: 100, mp: 80, maxMp: 100 };
+  assert(PVE.shouldSit(sitSave, sitUnit) === true, "shouldSit true when autoFarm and hp below sitHp");
+  sitUnit.hp = 50;
+  assert(PVE.shouldSit(sitSave, sitUnit) === false, "shouldSit false when hp and mp above thresholds");
+
+  const regenU = { hp: 40, maxHp: 200, mp: 5, maxMp: 80, hpRegen: 10, mpRegen: 3, isHero: true };
+  assert(WORLD.applySitRegen(regenU, 500) === 0, "sit regen accumulates under 1000ms");
+  assert(regenU.hp === 40 && regenU.mp === 5, "no heal before 1000ms");
+  assert(WORLD.applySitRegen(regenU, 500) === 1, "sit regen ticks at ~1000ms");
+  assert(regenU.hp === 60, "sitting tick heals 2× hpRegen (10*2=20), got " + regenU.hp);
+  assert(regenU.mp === 11, "sitting tick restores 2× mpRegen (3*2=6), got " + regenU.mp);
+
+  const farm = PVE.createSave("warrior", DATA.emptyAllocated());
+  farm.skillRanks = Object.assign(DATA.defaultSkillRanks("warrior"), { heal: 1, magifireblade: 1 });
+  PVE.ensureProgress(farm);
+  const setG = PVE.setFarmSkill(farm, 0, "heal");
+  const setA = PVE.setFarmSkill(farm, 1, "attack");
+  const setM = PVE.setFarmSkill(farm, 2, "magifireblade");
+  assert(setG.ok && setA.ok && setM.ok, "farm slots accept learned heal/attack/magifireblade");
+  const hero = PVE.buildHeroUnit(farm);
+  hero.cds = {};
+  const me = { x: 5, y: 5, unit: hero };
+  const foe = { x: 6, y: 5, dead: false, unit: { hp: 10, maxHp: 10 } };
+  assert(WORLD.pickFarmSkill(farm, me, foe) === "heal", "farm skill order picks first configured ready skill (heal)");
+  hero.cds.heal = 5000;
+  assert(WORLD.pickFarmSkill(farm, me, foe) === "attack", "farm skill order skips unready and casts next configured");
+  farm.autoFarmCfg.skills = [null, null, "magifireblade", "attack"];
+  hero.cds = {};
+  assert(WORLD.pickFarmSkill(farm, me, foe) === "magifireblade", "farm skill order skips empties");
+  hero.cds.magifireblade = 1;
+  hero.cds.attack = 1;
+  assert(WORLD.pickFarmSkill(farm, me, foe) === null, "all empty/unready → null (fallback to existing heal/attack)");
+
+  const casts = [];
+  const origCast = WORLD.cast;
+  WORLD.cast = function (id) { casts.push(id); return true; };
+  farm.autoFarmCfg.skills = ["heal", "attack", null, null];
+  hero.cds = {};
+  const used = WORLD.tryFarmSkills(farm, me, foe);
+  WORLD.cast = origCast;
+  assert(used === true && casts[0] === "heal", "tryFarmSkills casts first configured ready skill");
+}
+
+console.log("field near hunting plain");
+{
+  MAP.setZone("field");
+  const fz = MAP.ZONES.field;
+  const g = fz.grid;
+  const spawn = fz.spawn;
+  function manh(x, y) {
+    return Math.abs(x - spawn.x) + Math.abs(y - spawn.y);
+  }
+  function isPlainTile(x, y) {
+    if (x <= 50 && y >= 70) return true;
+    return manh(x, y) < 32;
+  }
+  const n = g.cols;
+  let camTiles = 0;
+  let camWalk = 0;
+  let camMarks = 0;
+  for (let y = 78; y < n - 1; y++) {
+    for (let x = 1; x <= 44; x++) {
+      camTiles += 1;
+      if (g.walkable[y][x]) camWalk += 1;
+      if (g.decorAt && g.decorAt[x + "," + y]) camMarks += 1;
+    }
+  }
+  const camPct = camWalk / camTiles;
+  assert(camMarks <= 2, "first-camera landmarks 0-2, got " + camMarks);
+  assert(camPct >= 0.95, "first-camera almost all walkable, " + (camPct * 100).toFixed(1) + "%");
+
+  let landmarkN = 0;
+  (g.decor || []).forEach(function (d) {
+    if (isPlainTile(d.x, d.y)) landmarkN += 1;
+  });
+  assert(landmarkN >= 4 && landmarkN <= 8, "landmarks 4-8, got " + landmarkN);
+
+  let midTiles = 0;
+  let midDec = 0;
+  for (let y = 1; y < n - 1; y++) {
+    for (let x = 1; x < n - 1; x++) {
+      const d = manh(x, y);
+      if (d >= 30 && d < 52 && !isPlainTile(x, y)) midTiles += 1;
+    }
+  }
+  (g.decor || []).forEach(function (d) {
+    const dist = manh(d.x, d.y);
+    if (dist >= 30 && dist < 52 && !isPlainTile(d.x, d.y)) midDec += 1;
+  });
+  const midDens = midDec / midTiles;
+  assert(midDens >= 0.45, "mid-band outside rectangle still dense forest, dens " + midDens.toFixed(3));
+
+  const mobs = MAP.listFieldSpawns();
+  assert(mobs.length === 48, "48 field mobs, got " + mobs.length);
+  const ids = {};
+  mobs.forEach(function (m) { ids[m.monsterId] = 1; });
+  assert(Object.keys(ids).length === 15, "15 field ids, got " + Object.keys(ids).length);
+  const nearIds = { poring: 1, fabre: 1, lunatic: 1, willow: 1, condor: 1 };
+  let nearN = 0;
+  let nearOnWalk = 0;
+  mobs.forEach(function (m) {
+    assert(MAP.isWalkable(m.x, m.y), m.monsterId + " walkable");
+    assert(!(g.decorAt && g.decorAt[m.x + "," + m.y]), m.monsterId + " not inside tree cell");
+    const d = manh(m.x, m.y);
+    assert(d >= 8, "no mob manh<8, " + m.monsterId + " at " + d);
+    if (d < 30) {
+      nearN += 1;
+      assert(nearIds[m.monsterId], m.monsterId + " is a near-band id");
+      if (g.walkable[m.y][m.x] && !(g.decorAt && g.decorAt[m.x + "," + m.y])) nearOnWalk += 1;
+    }
+  });
+  assert(nearN > 0 && nearOnWalk === nearN, "near mobs stand in the open " + nearOnWalk + "/" + nearN);
+
+  let xN = 0;
+  Object.keys(g.cells).forEach(function (k) {
+    if (g.cells[k] === "X") xN += 1;
+  });
+  assert(xN === 20, "20 X-pad tiles, got " + xN);
+
+  const marks = MAP.FIELD_OVER_MARKS || [];
+  assert(marks.some(function (m) { return m.kind === "gate"; }), "overlay has gate");
+  assert(marks.every(function (m) { return m.kind !== "tree"; }), "overlay has no trees");
+  MAP.setZone("bosses");
+}
+
+
+console.log("carry weight");
+{
+  assert(DATA.maxWeight(0) === 2000, "DATA.maxWeight(0)===2000, got " + DATA.maxWeight(0));
+  assert(DATA.maxWeight(1) === 2030, "DATA.maxWeight(1)===2030, got " + DATA.maxWeight(1));
+  assert(DATA.maxWeight(10) === 2300, "DATA.maxWeight(10)===2300, got " + DATA.maxWeight(10));
+  assert(DATA.itemWeight("red") === 70, "DATA.itemWeight(red)===70, got " + DATA.itemWeight("red"));
+  assert(DATA.itemWeight("unknown_id") === 10, "missing weight → 10g");
+
+  const save = PVE.createSave("warrior", DATA.emptyAllocated());
+  // START_POTIONS red:5 orange:2 white:0 blue:1 → 5*70+2*10+1*15 = 385g
+  // createSave owns no gear and no materials, so carry is potions only.
+  const startW = 5 * 70 + 2 * 10 + 0 * 15 + 1 * 15;
+  assert(startW === 385, "START_POTIONS grams 385");
+  assert(Object.keys(save.owned || {}).filter(function (id) { return save.owned[id]; }).length === 0, "createSave owns no gear");
+  assert(!save.materials || !Object.keys(save.materials).some(function (id) { return save.materials[id]; }), "createSave has no materials");
+  assert(PVE.carryWeight(save) === 385, "new save carryWeight === 385, got " + PVE.carryWeight(save));
+  assert(PVE.maxWeight(save) === 2000, "STR 0 (allocated+equip) maxWeight 2000");
+
+  const room = PVE.maxWeight(save) - PVE.carryWeight(save);
+  assert(PVE.canCarry(save, room) === true, "canCarry exact remaining room");
+  assert(PVE.canCarry(save, room + 1) === false, "canCarry false when extra would exceed");
+
+  const ws0 = PVE.weightState(save);
+  assert(ws0.cur === 385 && ws0.max === 2000, "weightState cur/max");
+  assert(ws0.ratio === 385 / 2000, "weightState.ratio = cur/max, got " + ws0.ratio);
+  assert(ws0.noRegen === false && ws0.over === false && ws0.full === false, "start save not overweight");
+  const pack = PVE.createSave("warrior", DATA.emptyAllocated());
+  pack.potions = { red: 21, orange: 0, white: 0, blue: 0, berserk: 0 };
+  pack.zeno = 10000;
+  const ws70 = PVE.weightState(pack);
+  assert(ws70.cur === 1470 && ws70.noRegen === true && ws70.over === false, "21 red = 1470g >=70% noRegen");
+  pack.potions.red = 26;
+  const ws90 = PVE.weightState(pack);
+  assert(ws90.cur === 1820 && ws90.over === true && ws90.full === false, "26 red = 1820g >=90% over");
+  pack.potions.red = 29;
+  const ws100 = PVE.weightState(pack);
+  assert(ws100.cur === 2030 && ws100.full === true, "29 red = 2030g >2000 full");
+  assert(PVE.canCarry(pack, 10) === false, "full cannot carry more");
+  const shop = PVE.buy(pack, "helm_leather");
+  assert(shop.ok === false && /น้ำหนัก/.test(shop.reason || ""), "100% shop blocks extra gear");
+  const der = PVE.derived(save);
+  assert(der.weight && der.weight.cur === 385 && der.weight.max === 2000, "derived.weight is weightState");
+  assert(der.weight.ratio === 385 / 2000, "derived.weight.ratio");
+  assert(der.maxWeight === 2000, "derived.maxWeight from total STR");
+
+  const strSave = PVE.createSave("warrior", Object.assign(DATA.emptyAllocated(), { str: 10 }));
+  assert(PVE.maxWeight(strSave) === 2300, "allocated STR 10 → maxWeight 2300");
+
+  const fat = PVE.createSave("warrior", DATA.emptyAllocated());
+  fat.zeno = 10000;
+  fat.potions.red = 30; // 30*70 + 2*10 + 1*15 = 2135 > 2000
+  const zenoBefore = fat.zeno;
+  const potBlocked = PVE.buyPotion(fat, "orange");
+  assert(!potBlocked.ok && potBlocked.reason === "น้ำหนักเต็ม แบกไม่ไหว", "buyPotion overweight reason");
+  assert(fat.zeno === zenoBefore, "buyPotion overweight leaves zeno unchanged, got " + fat.zeno);
+  assert((fat.potions.orange || 0) === 2, "buyPotion overweight did not add orange");
+
+  const gearBlocked = PVE.buy(fat, "helm_leather");
+  assert(!gearBlocked.ok && gearBlocked.reason === "น้ำหนักเต็ม แบกไม่ไหว", "buy gear overweight");
+  assert(!fat.owned.helm_leather, "overweight buy did not grant item");
+
+  const okBuy = PVE.createSave("warrior", DATA.emptyAllocated());
+  okBuy.zeno = 10000;
+  const bought = PVE.buy(okBuy, "helm_leather");
+  assert(bought.ok && okBuy.owned.helm_leather, "buy helm_leather ok on new save");
+  assert(PVE.carryWeight(okBuy) === 385 + 10, "carry after helm_leather is 395");
+
+  const dropSave = PVE.createSave("warrior", DATA.emptyAllocated());
+  dropSave.potions = { red: 100, orange: 0, white: 0, blue: 0, berserk: 0 }; // 7000g, already at max
+  dropSave.zeno = 0;
+  const always = { next: function () { return 0; }, chance: function () { return true; } };
+  const r = PVE.applyFieldRewards(dropSave, "poring", always);
+  assert(r.zeno > 0, "overweight field still grants zeno, got " + r.zeno);
+  assert(r.baseExp === 45 && r.jobExp === 30, "overweight field still grants exp");
+  assert(!(r.loot && r.loot.length), "overweight field skips loot, got " + JSON.stringify(r.loot));
+  assert(!dropSave.owned.helm_leather, "overweight skip does not grant helm_leather");
+  assert((dropSave.materials.ore_phracon || 0) === 0, "overweight skip does not grant ore");
+  assert(dropSave.potions.red === 100, "overweight skip does not add potion");
+
+  const reDrop = PVE.createSave("warrior", DATA.emptyAllocated());
+  reDrop.owned.helm_leather = true;
+  reDrop.potions = { red: 100, orange: 0, white: 0, blue: 0, berserk: 0 };
+  const r2 = PVE.applyFieldRewards(reDrop, "poring", always);
+  assert(r2.loot.indexOf("helm_leather") >= 0, "already-owned item re-drop is 0 extra grams so it succeeds");
+  assert(r2.loot.indexOf("red") < 0 && r2.loot.indexOf("ore_phracon") < 0, "new pieces still skipped at max weight");
+}
+
+
+console.log("8-dir walk");
+{
+  MAP.setZone("field");
+  const spawn = MAP.ZONES.field.spawn;
+  const nbs = MAP.neighbors(spawn.x, spawn.y);
+  assert(nbs.some(function (p) { return p.x !== spawn.x && p.y !== spawn.y; }), "neighbors include a diagonal from field spawn");
+  const trail = MAP.path(spawn, { x: spawn.x + 4, y: spawn.y + 4 });
+  assert(trail.length === 4, "diagonal path to +4,+4 is 4 steps, got " + trail.length);
+  const first = trail[0];
+  assert(first && first.x !== spawn.x && first.y !== spawn.y, "path to +4,+4 starts with a diagonal step");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

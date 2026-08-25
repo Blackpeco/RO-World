@@ -3,6 +3,7 @@
 Designed 2026-08-26 to sit after the starter five
 (Poring 1, Fabre 2, Lunatic 2, Willow 3, Condor 3).
 Schema matches `DATA.MONSTERS` in js/data.js.
+Live drops: see monster-drops.md (5% ore / 1% wearable / 3-4% potion). Do not use old potion-only rates.
 
 Progression: Prontera field → swamp → Payon woods → first cave.
 
@@ -17,7 +18,7 @@ skills:
   mob_wolf_bite  กัด  basic  atk 1.15
   mob_wolf_howl  คำรามฝูง  special  cd 4  mp 14  atk 1.8
 baseExp 240  jobExp 160  zeno 90–140
-drops: orange 18
+drops: ore_oridecon 5% / boots_hunt 1% / orange 4%
 
 ## 2. poporing — โปโปริ่ง — Lv 11
 place: ป่าขอบเมือง
@@ -30,7 +31,7 @@ skills:
   mob_pop_hop  กระโดดชน  basic  atk 1.0
   mob_pop_acid  น้ำเมือกเปรี้ยว  special  cd 3  mp 12  atk 0.6  matk 1.1
 baseExp 265  jobExp 175  zeno 95–150
-drops: orange 16, blue 8
+drops: ore_phracon 5% / cloak_mage 1% / blue 4%
 
 ## 3. chonchon — ชอนชอน — Lv 12
 place: ทุ่งหญ้าโพรนเทรา
@@ -43,7 +44,7 @@ skills:
   mob_chon_buzz  ชนปีก  basic  atk 1.05
   mob_chon_dive  โฉบลง  special  cd 3  mp 10  atk 1.7
 baseExp 280  jobExp 185  zeno 100–155
-drops: red 28, orange 10
+drops: ore_phracon 5% / helm_iron 1% / red 4%
 
 ## 4. roda_frog — โรด้าฟร็อก — Lv 13
 place: บึงน้ำเขียว
@@ -56,7 +57,7 @@ skills:
   mob_frog_tongue  แลบลิ้น  basic  atk 1.1
   mob_frog_slam  กระโดดทับ  special  cd 4  mp 16  atk 1.9
 baseExp 310  jobExp 205  zeno 110–170
-drops: orange 20, blue 6
+drops: ore_elunium 5% / shield_iron 1% / orange 4%
 
 ## 5. spore — สปอร์ — Lv 14
 place: ป่าพายอน
@@ -69,7 +70,7 @@ skills:
   mob_spore_puff  พ่นสปอร์  basic  atk 0.4  matk 0.9
   mob_spore_cloud  หมอกละออง  special  cd 4  mp 18  atk 0.3  matk 1.4
 baseExp 335  jobExp 220  zeno 115–180
-drops: blue 14, orange 12
+drops: ore_phracon 5% / armor_robe 1% / blue 4%
 
 ## 6. rocker — ร็อกเกอร์ — Lv 15
 place: ทุ่งหญ้าโพรนเทรา
@@ -82,7 +83,7 @@ skills:
   mob_rock_strum  ดีดขา  basic  atk 1.1
   mob_rock_screech  กรีดร้อง  special  cd 3  mp 14  atk 1.75
 baseExp 365  jobExp 240  zeno 125–195
-drops: orange 18, blue 8
+drops: ore_oridecon 5% / acc_life 1% / orange 3%
 
 ## 7. steel_chonchon — สตีลชอนชอน — Lv 16
 place: ทุ่งหินตะวันตก
@@ -95,7 +96,7 @@ skills:
   mob_steel_buzz  ชนเกราะ  basic  atk 1.2
   mob_steel_ram  พุ่งชนเหล็ก  special  cd 4  mp 16  atk 1.85
 baseExp 395  jobExp 260  zeno 135–210
-drops: orange 16, white 4
+drops: ore_elunium 5% / shield_iron 1% / orange 4%
 
 ## 8. savage_babe — เซเวจเบบี้ — Lv 17
 place: ป่าลึก
@@ -108,7 +109,7 @@ skills:
   mob_babe_gore  ขวิด  basic  atk 1.2
   mob_babe_rush  พุ่งชน  special  cd 4  mp 16  atk 2.0
 baseExp 430  jobExp 280  zeno 145–225
-drops: orange 20, white 5
+drops: ore_oridecon 5% / armor_chain 1% / orange 4%
 
 ## 9. elder_willow — เอลเดอร์วิลโลว์ — Lv 18
 place: ป่าพายอน
@@ -121,7 +122,7 @@ skills:
   mob_elder_hit  เหวี่ยงกิ่งไฟ  basic  atk 0.8  matk 0.6
   mob_elder_flame  ไฟลามใบ  special  cd 4  mp 20  atk 0.4  matk 1.5
 baseExp 470  jobExp 305  zeno 155–240
-drops: blue 16, white 6
+drops: ore_elunium 5% / helm_wizard 1% / blue 4%
 
 ## 10. skeleton — สเกเลตัน — Lv 20
 place: ถ้ำหินพายอน
@@ -134,7 +135,7 @@ skills:
   mob_skel_slash  ฟันดาบกระดูก  basic  atk 1.2
   mob_skel_bone  ขว้างกระดูก  special  cd 3  mp 14  atk 1.8
 baseExp 530  jobExp 345  zeno 175–270
-drops: orange 18, white 8
+drops: ore_elunium 5% / acc_life 1% / white 3%
 
 ## Spawn notes
 - ทุ่งหญ้าโพรนเทรา: wolf, chonchon, rocker

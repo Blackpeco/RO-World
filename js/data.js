@@ -61,6 +61,23 @@
   DATA.AUTO_FARM_STOP_HP = 0.15;
   DATA.START_POTIONS = { red: 5, orange: 2, white: 0, blue: 1 };
 
+  DATA.WEIGHT_BASE = 2000;
+  DATA.WEIGHT_PER_STR = 30;
+  DATA.itemWeight = function (idOrDef) {
+    if (idOrDef && typeof idOrDef === "object") return Math.max(0, Number(idOrDef.weight) || 10);
+    const id = idOrDef;
+    const pot = DATA.POTIONS && DATA.POTIONS[id];
+    if (pot) return Math.max(0, Number(pot.weight) || 10);
+    const mat = DATA.MATERIALS && DATA.MATERIALS[id];
+    if (mat) return Math.max(0, Number(mat.weight) || 10);
+    const it = DATA.ITEMS && DATA.ITEMS[id];
+    if (it) return Math.max(0, Number(it.weight) || 10);
+    return 10;
+  };
+  DATA.maxWeight = function (str) {
+    return DATA.WEIGHT_BASE + (str | 0) * DATA.WEIGHT_PER_STR;
+  };
+
   DATA.baseExpToNext = function (lv) {
     lv = Math.max(1, Math.floor(lv || 1));
     return Math.floor(80 * Math.pow(lv, 1.65));
@@ -534,6 +551,14 @@
       emoji: "🩷",
       place: "ป่าสงบ",
       level: 1,
+      str: 5,
+      agi: 5,
+      vit: 4,
+      int: 2,
+      dex: 4,
+      luk: 8,
+      hardDef: 0,
+      hardMdef: 0,
       color: "#ff8ab8",
       hp: 800,
       mp: 40,
@@ -551,7 +576,11 @@
       jobExp: 30,
       zenoMin: 20,
       zenoMax: 40,
-      drops: [{ id: "red", chance: 35 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "helm_leather", chance: 1 },
+        { kind: "potion", id: "red", chance: 4 },
+      ],
     },
     {
       id: "fabre",
@@ -561,6 +590,14 @@
       emoji: "🐛",
       place: "ป่าสงบ",
       level: 2,
+      str: 6,
+      agi: 6,
+      vit: 8,
+      int: 3,
+      dex: 5,
+      luk: 4,
+      hardDef: 1,
+      hardMdef: 0,
       color: "#7cb342",
       hp: 1000,
       mp: 50,
@@ -578,7 +615,11 @@
       jobExp: 40,
       zenoMin: 25,
       zenoMax: 50,
-      drops: [{ id: "red", chance: 22 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "armor_rough", chance: 1 },
+        { kind: "potion", id: "red", chance: 4 },
+      ],
     },
     {
       id: "lunatic",
@@ -588,6 +629,14 @@
       emoji: "🐰",
       place: "ป่าสงบ",
       level: 2,
+      str: 7,
+      agi: 14,
+      vit: 5,
+      int: 2,
+      dex: 8,
+      luk: 10,
+      hardDef: 0,
+      hardMdef: 0,
       color: "#f4e4c8",
       hp: 1200,
       mp: 45,
@@ -605,7 +654,11 @@
       jobExp: 50,
       zenoMin: 30,
       zenoMax: 55,
-      drops: [{ id: "orange", chance: 12 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "cloak_travel", chance: 1 },
+        { kind: "potion", id: "orange", chance: 3 },
+      ],
     },
     {
       id: "willow",
@@ -615,6 +668,14 @@
       emoji: "🌳",
       place: "ป่าขอบเมือง",
       level: 3,
+      str: 8,
+      agi: 4,
+      vit: 12,
+      int: 14,
+      dex: 6,
+      luk: 3,
+      hardDef: 8,
+      hardMdef: 6,
       color: "#6b4f2a",
       hp: 1500,
       mp: 70,
@@ -632,7 +693,11 @@
       jobExp: 65,
       zenoMin: 40,
       zenoMax: 70,
-      drops: [{ id: "blue", chance: 10 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "boots_leather", chance: 1 },
+        { kind: "potion", id: "blue", chance: 4 },
+      ],
     },
     {
       id: "condor",
@@ -642,6 +707,14 @@
       emoji: "🦅",
       place: "ป่าสงบ",
       level: 3,
+      str: 9,
+      agi: 12,
+      vit: 6,
+      int: 3,
+      dex: 11,
+      luk: 5,
+      hardDef: 2,
+      hardMdef: 0,
       color: "#8d6e4c",
       hp: 1400,
       mp: 55,
@@ -659,7 +732,11 @@
       jobExp: 60,
       zenoMin: 35,
       zenoMax: 65,
-      drops: [{ id: "orange", chance: 15 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "shield_wood", chance: 1 },
+        { kind: "potion", id: "orange", chance: 3 },
+      ],
     },
     {
       id: "wolf",
@@ -669,6 +746,14 @@
       emoji: "🐺",
       place: "ทุ่งหญ้าโพรนเทรา",
       level: 10,
+      str: 28,
+      agi: 22,
+      vit: 16,
+      int: 4,
+      dex: 18,
+      luk: 8,
+      hardDef: 8,
+      hardMdef: 2,
       color: "#6d5a4a",
       hp: 3400,
       mp: 70,
@@ -686,7 +771,11 @@
       jobExp: 160,
       zenoMin: 90,
       zenoMax: 140,
-      drops: [{ id: "orange", chance: 18 }],
+      drops: [
+        { kind: "material", id: "ore_oridecon", chance: 5 },
+        { kind: "item", id: "boots_hunt", chance: 1 },
+        { kind: "potion", id: "orange", chance: 4 },
+      ],
     },
     {
       id: "poporing",
@@ -696,6 +785,14 @@
       emoji: "💚",
       place: "ป่าขอบเมือง",
       level: 11,
+      str: 14,
+      agi: 12,
+      vit: 20,
+      int: 22,
+      dex: 12,
+      luk: 10,
+      hardDef: 4,
+      hardMdef: 8,
       color: "#4caf6a",
       hp: 3600,
       mp: 90,
@@ -713,7 +810,11 @@
       jobExp: 175,
       zenoMin: 95,
       zenoMax: 150,
-      drops: [{ id: "orange", chance: 16 }, { id: "blue", chance: 8 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "cloak_mage", chance: 1 },
+        { kind: "potion", id: "blue", chance: 4 },
+      ],
     },
     {
       id: "chonchon",
@@ -723,6 +824,14 @@
       emoji: "🪰",
       place: "ทุ่งหญ้าโพรนเทรา",
       level: 12,
+      str: 12,
+      agi: 36,
+      vit: 10,
+      int: 6,
+      dex: 20,
+      luk: 8,
+      hardDef: 2,
+      hardMdef: 4,
       color: "#c4a35a",
       hp: 2800,
       mp: 60,
@@ -740,7 +849,11 @@
       jobExp: 185,
       zenoMin: 100,
       zenoMax: 155,
-      drops: [{ id: "red", chance: 28 }, { id: "orange", chance: 10 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "helm_iron", chance: 1 },
+        { kind: "potion", id: "red", chance: 4 },
+      ],
     },
     {
       id: "roda_frog",
@@ -750,6 +863,14 @@
       emoji: "🐸",
       place: "บึงน้ำเขียว",
       level: 13,
+      str: 18,
+      agi: 8,
+      vit: 38,
+      int: 8,
+      dex: 12,
+      luk: 4,
+      hardDef: 22,
+      hardMdef: 5,
       color: "#3d8b5a",
       hp: 4800,
       mp: 80,
@@ -767,7 +888,11 @@
       jobExp: 205,
       zenoMin: 110,
       zenoMax: 170,
-      drops: [{ id: "orange", chance: 20 }, { id: "blue", chance: 6 }],
+      drops: [
+        { kind: "material", id: "ore_elunium", chance: 5 },
+        { kind: "item", id: "shield_iron", chance: 1 },
+        { kind: "potion", id: "orange", chance: 4 },
+      ],
     },
     {
       id: "spore",
@@ -777,6 +902,14 @@
       emoji: "🍄",
       place: "ป่าพายอน",
       level: 14,
+      str: 10,
+      agi: 10,
+      vit: 16,
+      int: 36,
+      dex: 14,
+      luk: 6,
+      hardDef: 6,
+      hardMdef: 12,
       color: "#e8d5a3",
       hp: 3900,
       mp: 120,
@@ -794,7 +927,11 @@
       jobExp: 220,
       zenoMin: 115,
       zenoMax: 180,
-      drops: [{ id: "blue", chance: 14 }, { id: "orange", chance: 12 }],
+      drops: [
+        { kind: "material", id: "ore_phracon", chance: 5 },
+        { kind: "item", id: "armor_robe", chance: 1 },
+        { kind: "potion", id: "blue", chance: 4 },
+      ],
     },
     {
       id: "rocker",
@@ -804,6 +941,14 @@
       emoji: "🦗",
       place: "ทุ่งหญ้าโพรนเทรา",
       level: 15,
+      str: 16,
+      agi: 32,
+      vit: 14,
+      int: 10,
+      dex: 26,
+      luk: 18,
+      hardDef: 6,
+      hardMdef: 4,
       color: "#8fbf4a",
       hp: 4100,
       mp: 85,
@@ -821,7 +966,11 @@
       jobExp: 240,
       zenoMin: 125,
       zenoMax: 195,
-      drops: [{ id: "orange", chance: 18 }, { id: "blue", chance: 8 }],
+      drops: [
+        { kind: "material", id: "ore_oridecon", chance: 5 },
+        { kind: "item", id: "acc_life", chance: 1 },
+        { kind: "potion", id: "orange", chance: 3 },
+      ],
     },
     {
       id: "steel_chonchon",
@@ -831,6 +980,14 @@
       emoji: "⚙️",
       place: "ทุ่งหินตะวันตก",
       level: 16,
+      str: 18,
+      agi: 28,
+      vit: 24,
+      int: 8,
+      dex: 20,
+      luk: 6,
+      hardDef: 48,
+      hardMdef: 8,
       color: "#8a8f96",
       hp: 3600,
       mp: 70,
@@ -848,7 +1005,11 @@
       jobExp: 260,
       zenoMin: 135,
       zenoMax: 210,
-      drops: [{ id: "orange", chance: 16 }, { id: "white", chance: 4 }],
+      drops: [
+        { kind: "material", id: "ore_elunium", chance: 5 },
+        { kind: "item", id: "shield_iron", chance: 1 },
+        { kind: "potion", id: "orange", chance: 4 },
+      ],
     },
     {
       id: "savage_babe",
@@ -858,6 +1019,14 @@
       emoji: "🐗",
       place: "ป่าลึก",
       level: 17,
+      str: 36,
+      agi: 16,
+      vit: 28,
+      int: 4,
+      dex: 16,
+      luk: 8,
+      hardDef: 18,
+      hardMdef: 3,
       color: "#b07a48",
       hp: 5200,
       mp: 75,
@@ -875,7 +1044,11 @@
       jobExp: 280,
       zenoMin: 145,
       zenoMax: 225,
-      drops: [{ id: "orange", chance: 20 }, { id: "white", chance: 5 }],
+      drops: [
+        { kind: "material", id: "ore_oridecon", chance: 5 },
+        { kind: "item", id: "armor_chain", chance: 1 },
+        { kind: "potion", id: "orange", chance: 4 },
+      ],
     },
     {
       id: "elder_willow",
@@ -885,6 +1058,14 @@
       emoji: "🔥",
       place: "ป่าพายอน",
       level: 18,
+      str: 16,
+      agi: 8,
+      vit: 30,
+      int: 40,
+      dex: 14,
+      luk: 6,
+      hardDef: 20,
+      hardMdef: 22,
       color: "#c45c2a",
       hp: 5600,
       mp: 140,
@@ -902,7 +1083,11 @@
       jobExp: 305,
       zenoMin: 155,
       zenoMax: 240,
-      drops: [{ id: "blue", chance: 16 }, { id: "white", chance: 6 }],
+      drops: [
+        { kind: "material", id: "ore_elunium", chance: 5 },
+        { kind: "item", id: "helm_wizard", chance: 1 },
+        { kind: "potion", id: "blue", chance: 4 },
+      ],
     },
     {
       id: "skeleton",
@@ -912,6 +1097,14 @@
       emoji: "💀",
       place: "ถ้ำหินพายอน",
       level: 20,
+      str: 34,
+      agi: 14,
+      vit: 26,
+      int: 8,
+      dex: 22,
+      luk: 4,
+      hardDef: 30,
+      hardMdef: 6,
       color: "#d8d0c0",
       hp: 6100,
       mp: 90,
@@ -929,7 +1122,11 @@
       jobExp: 345,
       zenoMin: 175,
       zenoMax: 270,
-      drops: [{ id: "orange", chance: 18 }, { id: "white", chance: 8 }],
+      drops: [
+        { kind: "material", id: "ore_elunium", chance: 5 },
+        { kind: "item", id: "acc_life", chance: 1 },
+        { kind: "potion", id: "white", chance: 3 },
+      ],
     },
   ];
 
@@ -1012,74 +1209,74 @@
   ];
 
   DATA.ITEMS = {
-    helm_leather: { id: "helm_leather", type: "helm", name: "หมวกผ้า", price: 80, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    helm_iron: { id: "helm_iron", type: "helm", name: "หมวกหนัง", price: 150, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 3 } },
-    helm_wizard: { id: "helm_wizard", type: "helm", name: "หมวกสำรวจ", price: 160, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 4 } },
-    helm_crown: { id: "helm_crown", type: "helm", name: "หมวกเหล็ก", price: 320, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 5 } },
+    helm_leather: { id: "helm_leather", weight: 10, type: "helm", name: "หมวกผ้า", price: 80, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    helm_iron: { id: "helm_iron", weight: 20, type: "helm", name: "หมวกหนัง", price: 150, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 3 } },
+    helm_wizard: { id: "helm_wizard", weight: 20, type: "helm", name: "หมวกสำรวจ", price: 160, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 4 } },
+    helm_crown: { id: "helm_crown", weight: 40, type: "helm", name: "หมวกเหล็ก", price: 320, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 5 } },
 
-    eyes_hunter: { id: "eyes_hunter", type: "eyes", name: "แว่นตาล่าสัตว์", price: 90, bonuses: { accuracy: 3 } },
-    eyes_pirate: { id: "eyes_pirate", type: "eyes", name: "ผ้าปิดตาโจรสลัด", price: 100, bonuses: { crit: 3 } },
-    eyes_magic: { id: "eyes_magic", type: "eyes", name: "แว่นเวทมนตร์", price: 150, bonuses: { matk: 10, accuracy: 2 } },
-    eyes_third: { id: "eyes_third", type: "eyes", name: "ตาที่สามศักดิ์สิทธิ์", price: 280, bonuses: { crit: 5, accuracy: 5 } },
+    eyes_hunter: { id: "eyes_hunter", weight: 10, type: "eyes", name: "แว่นตาล่าสัตว์", price: 90, bonuses: { accuracy: 3 } },
+    eyes_pirate: { id: "eyes_pirate", weight: 10, type: "eyes", name: "ผ้าปิดตาโจรสลัด", price: 100, bonuses: { crit: 3 } },
+    eyes_magic: { id: "eyes_magic", weight: 10, type: "eyes", name: "แว่นเวทมนตร์", price: 150, bonuses: { matk: 10, accuracy: 2 } },
+    eyes_third: { id: "eyes_third", weight: 10, type: "eyes", name: "ตาที่สามศักดิ์สิทธิ์", price: 280, bonuses: { crit: 5, accuracy: 5 } },
 
-    mouth_scarf: { id: "mouth_scarf", type: "mouth", name: "ผ้าพันคอ", price: 70, bonuses: { mp: 15 } },
-    mouth_mask: { id: "mouth_mask", type: "mouth", name: "หน้ากากปิดปาก", price: 200, bonuses: { mpRegen: 2 } },
-    mouth_pipe: { id: "mouth_pipe", type: "mouth", name: "ท่อหายใจเวทมนตร์", price: 200, bonuses: { mp: 25, mpRegen: 3 } },
-    mouth_dragon: { id: "mouth_dragon", type: "mouth", name: "สร้อยคางมังกร", price: 250, bonuses: { atk: 25, hpRegen: 4 } },
+    mouth_scarf: { id: "mouth_scarf", weight: 10, type: "mouth", name: "ผ้าพันคอ", price: 70, bonuses: { mp: 15 } },
+    mouth_mask: { id: "mouth_mask", weight: 10, type: "mouth", name: "หน้ากากปิดปาก", price: 200, bonuses: { mpRegen: 2 } },
+    mouth_pipe: { id: "mouth_pipe", weight: 15, type: "mouth", name: "ท่อหายใจเวทมนตร์", price: 200, bonuses: { mp: 25, mpRegen: 3 } },
+    mouth_dragon: { id: "mouth_dragon", weight: 20, type: "mouth", name: "สร้อยคางมังกร", price: 250, bonuses: { atk: 25, hpRegen: 4 } },
 
-    armor_rough: { id: "armor_rough", type: "armor", name: "เสื้อผ้าฝ้าย", price: 150, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    armor_chain: { id: "armor_chain", type: "armor", name: "ชุดผจญภัย", price: 250, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 5 } },
-    armor_robe: { id: "armor_robe", type: "armor", name: "ชุดคลุม", price: 400, jobs: "all", defTier: "low", bonuses: { hardDef: 2 } },
-    armor_knight: { id: "armor_knight", type: "armor", name: "เกราะโซ่", price: 500, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 8 } },
+    armor_rough: { id: "armor_rough", weight: 10, type: "armor", name: "เสื้อผ้าฝ้าย", price: 150, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    armor_chain: { id: "armor_chain", weight: 50, type: "armor", name: "ชุดผจญภัย", price: 250, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 5 } },
+    armor_robe: { id: "armor_robe", weight: 30, type: "armor", name: "ชุดคลุม", price: 400, jobs: "all", defTier: "low", bonuses: { hardDef: 2 } },
+    armor_knight: { id: "armor_knight", weight: 100, type: "armor", name: "เกราะโซ่", price: 500, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 8 } },
 
-    weapon_short: { id: "weapon_short", type: "weapon", name: "ดาบสั้นฝึกซ้อม", price: 200, weaponClass: "sword", weaponAtk: 70, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
-    weapon_long: { id: "weapon_long", type: "weapon", name: "ดาบยาว", price: 600, weaponClass: "sword", weaponAtk: 120, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
-    weapon_void: { id: "weapon_void", type: "weapon", name: "ดาบราชัน", price: 1500, weaponClass: "sword", weaponAtk: 200, weaponMatk: 0, reqLevel: 35, element: "none", jobs: DATA.JOB_SWORD, bonuses: {}, tier: "high" },
-    weapon_knife: { id: "weapon_knife", type: "weapon", name: "มีดสั้นฝึก", price: 180, weaponClass: "dagger", weaponAtk: 40, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
-    weapon_dirk: { id: "weapon_dirk", type: "weapon", name: "กริช", price: 500, weaponClass: "dagger", weaponAtk: 75, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
-    weapon_shadow: { id: "weapon_shadow", type: "weapon", name: "กริชเงา", price: 1200, weaponClass: "dagger", weaponAtk: 120, weaponMatk: 0, reqLevel: 30, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {}, tier: "high" },
-    weapon_bow: { id: "weapon_bow", type: "weapon", name: "ธนูฝึกยิง", price: 200, weaponClass: "bow", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
-    weapon_oakbow: { id: "weapon_oakbow", type: "weapon", name: "ธนูไม้โอ๊ค", price: 550, weaponClass: "bow", weaponAtk: 100, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
-    weapon_hawk: { id: "weapon_hawk", type: "weapon", name: "ธนูเหยี่ยว", price: 1400, weaponClass: "bow", weaponAtk: 150, weaponMatk: 0, reqLevel: 32, element: "none", jobs: DATA.JOB_BOW, bonuses: {}, tier: "high" },
-    weapon_staff: { id: "weapon_staff", type: "weapon", name: "คทาฝึกเวท", price: 200, weaponClass: "staff", weaponAtk: 0, weaponMatk: 100, reqLevel: 1, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
-    weapon_arch: { id: "weapon_arch", type: "weapon", name: "คทาไม้", price: 650, weaponClass: "staff", weaponAtk: 0, weaponMatk: 170, reqLevel: 14, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
-    weapon_sage: { id: "weapon_sage", type: "weapon", name: "คทามหาเวท", price: 1600, weaponClass: "staff", weaponAtk: 0, weaponMatk: 260, reqLevel: 36, element: "none", jobs: DATA.JOB_STAFF, bonuses: {}, tier: "high" },
-    weapon_hatchet: { id: "weapon_hatchet", type: "weapon", name: "ขวานไม้", price: 220, weaponClass: "axe", weaponAtk: 100, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_AXE, bonuses: {} },
-    weapon_battleaxe: { id: "weapon_battleaxe", type: "weapon", name: "ขวานต่อสู้", price: 700, weaponClass: "axe", weaponAtk: 160, weaponMatk: 0, reqLevel: 16, element: "none", jobs: DATA.JOB_AXE, bonuses: {} },
-    weapon_waraxe: { id: "weapon_waraxe", type: "weapon", name: "ขวานสงคราม", price: 1600, weaponClass: "axe", weaponAtk: 250, weaponMatk: 0, reqLevel: 38, element: "none", jobs: DATA.JOB_AXE, bonuses: {}, tier: "high" },
-    weapon_club: { id: "weapon_club", type: "weapon", name: "กระบองไม้", price: 180, weaponClass: "mace", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_MACE, bonuses: {} },
-    weapon_mace: { id: "weapon_mace", type: "weapon", name: "กระบองเหล็ก", price: 550, weaponClass: "mace", weaponAtk: 110, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_MACE, bonuses: {} },
-    weapon_holy: { id: "weapon_holy", type: "weapon", name: "กระบองศักดิ์สิทธิ์", price: 1400, weaponClass: "mace", weaponAtk: 180, weaponMatk: 0, reqLevel: 34, element: "none", jobs: DATA.JOB_MACE, bonuses: {}, tier: "high" },
+    weapon_short: { id: "weapon_short", weight: 50, type: "weapon", name: "ดาบสั้นฝึกซ้อม", price: 200, weaponClass: "sword", weaponAtk: 70, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
+    weapon_long: { id: "weapon_long", weight: 70, type: "weapon", name: "ดาบยาว", price: 600, weaponClass: "sword", weaponAtk: 120, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
+    weapon_void: { id: "weapon_void", weight: 100, type: "weapon", name: "ดาบราชัน", price: 1500, weaponClass: "sword", weaponAtk: 200, weaponMatk: 0, reqLevel: 35, element: "none", jobs: DATA.JOB_SWORD, bonuses: {}, tier: "high" },
+    weapon_knife: { id: "weapon_knife", weight: 40, type: "weapon", name: "มีดสั้นฝึก", price: 180, weaponClass: "dagger", weaponAtk: 40, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
+    weapon_dirk: { id: "weapon_dirk", weight: 50, type: "weapon", name: "กริช", price: 500, weaponClass: "dagger", weaponAtk: 75, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
+    weapon_shadow: { id: "weapon_shadow", weight: 60, type: "weapon", name: "กริชเงา", price: 1200, weaponClass: "dagger", weaponAtk: 120, weaponMatk: 0, reqLevel: 30, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {}, tier: "high" },
+    weapon_bow: { id: "weapon_bow", weight: 50, type: "weapon", name: "ธนูฝึกยิง", price: 200, weaponClass: "bow", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
+    weapon_oakbow: { id: "weapon_oakbow", weight: 90, type: "weapon", name: "ธนูไม้โอ๊ค", price: 550, weaponClass: "bow", weaponAtk: 100, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
+    weapon_hawk: { id: "weapon_hawk", weight: 120, type: "weapon", name: "ธนูเหยี่ยว", price: 1400, weaponClass: "bow", weaponAtk: 150, weaponMatk: 0, reqLevel: 32, element: "none", jobs: DATA.JOB_BOW, bonuses: {}, tier: "high" },
+    weapon_staff: { id: "weapon_staff", weight: 40, type: "weapon", name: "คทาฝึกเวท", price: 200, weaponClass: "staff", weaponAtk: 0, weaponMatk: 100, reqLevel: 1, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
+    weapon_arch: { id: "weapon_arch", weight: 50, type: "weapon", name: "คทาไม้", price: 650, weaponClass: "staff", weaponAtk: 0, weaponMatk: 170, reqLevel: 14, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
+    weapon_sage: { id: "weapon_sage", weight: 70, type: "weapon", name: "คทามหาเวท", price: 1600, weaponClass: "staff", weaponAtk: 0, weaponMatk: 260, reqLevel: 36, element: "none", jobs: DATA.JOB_STAFF, bonuses: {}, tier: "high" },
+    weapon_hatchet: { id: "weapon_hatchet", weight: 80, type: "weapon", name: "ขวานไม้", price: 220, weaponClass: "axe", weaponAtk: 100, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_AXE, bonuses: {} },
+    weapon_battleaxe: { id: "weapon_battleaxe", weight: 150, type: "weapon", name: "ขวานต่อสู้", price: 700, weaponClass: "axe", weaponAtk: 160, weaponMatk: 0, reqLevel: 16, element: "none", jobs: DATA.JOB_AXE, bonuses: {} },
+    weapon_waraxe: { id: "weapon_waraxe", weight: 200, type: "weapon", name: "ขวานสงคราม", price: 1600, weaponClass: "axe", weaponAtk: 250, weaponMatk: 0, reqLevel: 38, element: "none", jobs: DATA.JOB_AXE, bonuses: {}, tier: "high" },
+    weapon_club: { id: "weapon_club", weight: 50, type: "weapon", name: "กระบองไม้", price: 180, weaponClass: "mace", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_MACE, bonuses: {} },
+    weapon_mace: { id: "weapon_mace", weight: 70, type: "weapon", name: "กระบองเหล็ก", price: 550, weaponClass: "mace", weaponAtk: 110, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_MACE, bonuses: {} },
+    weapon_holy: { id: "weapon_holy", weight: 80, type: "weapon", name: "กระบองศักดิ์สิทธิ์", price: 1400, weaponClass: "mace", weaponAtk: 180, weaponMatk: 0, reqLevel: 34, element: "none", jobs: DATA.JOB_MACE, bonuses: {}, tier: "high" },
 
-    shield_wood: { id: "shield_wood", type: "shield", name: "โล่ไม้", price: 80, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    shield_iron: { id: "shield_iron", type: "shield", name: "บัคเลอร์", price: 160, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 4 } },
-    shield_magic: { id: "shield_magic", type: "shield", name: "โล่เล็ก", price: 180, jobs: "all", defTier: "low", bonuses: { hardDef: 2 } },
-    shield_dragon: { id: "shield_dragon", type: "shield", name: "โล่เหล็ก", price: 300, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 6 } },
+    shield_wood: { id: "shield_wood", weight: 30, type: "shield", name: "โล่ไม้", price: 80, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    shield_iron: { id: "shield_iron", weight: 40, type: "shield", name: "บัคเลอร์", price: 160, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 4 } },
+    shield_magic: { id: "shield_magic", weight: 40, type: "shield", name: "โล่เล็ก", price: 180, jobs: "all", defTier: "low", bonuses: { hardDef: 2 } },
+    shield_dragon: { id: "shield_dragon", weight: 80, type: "shield", name: "โล่เหล็ก", price: 300, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 6 } },
 
-    cloak_travel: { id: "cloak_travel", type: "cloak", name: "ฮู้ดผ้า", price: 100, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    cloak_shadow: { id: "cloak_shadow", type: "cloak", name: "ผ้าคลุมผจญภัย", price: 130, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 2 } },
-    cloak_mage: { id: "cloak_mage", type: "cloak", name: "ผ้าคลุม", price: 200, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    cloak_invis: { id: "cloak_invis", type: "cloak", name: "แมนเทิล", price: 260, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 3 } },
+    cloak_travel: { id: "cloak_travel", weight: 10, type: "cloak", name: "ฮู้ดผ้า", price: 100, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    cloak_shadow: { id: "cloak_shadow", weight: 20, type: "cloak", name: "ผ้าคลุมผจญภัย", price: 130, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 2 } },
+    cloak_mage: { id: "cloak_mage", weight: 20, type: "cloak", name: "ผ้าคลุม", price: 200, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    cloak_invis: { id: "cloak_invis", weight: 40, type: "cloak", name: "แมนเทิล", price: 260, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 3 } },
 
-    boots_leather: { id: "boots_leather", type: "boots", name: "รองเท้าแตะ", price: 120, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    boots_light: { id: "boots_light", type: "boots", name: "รองเท้าผ้า", price: 150, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
-    boots_hunt: { id: "boots_hunt", type: "boots", name: "รองเท้าหนัง", price: 200, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 2 } },
-    boots_wing: { id: "boots_wing", type: "boots", name: "รองเท้าทหาร", price: 300, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 3 } },
+    boots_leather: { id: "boots_leather", weight: 10, type: "boots", name: "รองเท้าแตะ", price: 120, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    boots_light: { id: "boots_light", weight: 10, type: "boots", name: "รองเท้าผ้า", price: 150, jobs: "all", defTier: "low", bonuses: { hardDef: 1 } },
+    boots_hunt: { id: "boots_hunt", weight: 20, type: "boots", name: "รองเท้าหนัง", price: 200, jobs: DATA.JOB_MID, defTier: "mid", bonuses: { hardDef: 2 } },
+    boots_wing: { id: "boots_wing", weight: 40, type: "boots", name: "รองเท้าทหาร", price: 300, jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 3 } },
 
-    acc_power: { id: "acc_power", type: "acc", name: "แหวนพลัง", price: 400, bonuses: { atk: 10, matk: 10 } },
-    acc_magic: { id: "acc_magic", type: "acc", name: "แหวนเวทย์", price: 400, bonuses: { matk: 30 } },
-    acc_life: { id: "acc_life", type: "acc", name: "สร้อยชีวิต", price: 300, bonuses: { hp: 50, hpRegen: 1 } },
-    acc_wizard: { id: "acc_wizard", type: "acc", name: "แหวนนักเวท", price: 300, bonuses: { mp: 20, mpRegen: 1 } },
-    acc_luck: { id: "acc_luck", type: "acc", name: "จี้โชคลาภ", price: 500, bonuses: { crit: 3, critMult: 10 } },
+    acc_power: { id: "acc_power", weight: 10, type: "acc", name: "แหวนพลัง", price: 400, bonuses: { atk: 10, matk: 10 } },
+    acc_magic: { id: "acc_magic", weight: 10, type: "acc", name: "แหวนเวทย์", price: 400, bonuses: { matk: 30 } },
+    acc_life: { id: "acc_life", weight: 10, type: "acc", name: "สร้อยชีวิต", price: 300, bonuses: { hp: 50, hpRegen: 1 } },
+    acc_wizard: { id: "acc_wizard", weight: 10, type: "acc", name: "แหวนนักเวท", price: 300, bonuses: { mp: 20, mpRegen: 1 } },
+    acc_luck: { id: "acc_luck", weight: 10, type: "acc", name: "จี้โชคลาภ", price: 500, bonuses: { crit: 3, critMult: 10 } },
 
-    helm_abyss: { id: "helm_abyss", type: "helm", name: "เกรทเฮล์ม", price: 900, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 6 } },
-    eyes_judge: { id: "eyes_judge", type: "eyes", name: "ดวงตาผู้พิพากษาอเวจี", price: 850, tier: "high", bonuses: { crit: 12, accuracy: 12 } },
-    mouth_whisper: { id: "mouth_whisper", type: "mouth", name: "หน้ากากกระซิบมรณะ", price: 800, tier: "high", bonuses: { mp: 80, mpRegen: 8 } },
-    armor_ruin: { id: "armor_ruin", type: "armor", name: "เกราะแผ่น", price: 1400, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 10 } },
-    shield_eclipse: { id: "shield_eclipse", type: "shield", name: "โล่ทาวเวอร์", price: 1100, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 8 } },
-    cloak_night: { id: "cloak_night", type: "cloak", name: "ผ้าคลุมทหาร", price: 1000, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
-    boots_gale: { id: "boots_gale", type: "boots", name: "รองเท้าเหล็ก", price: 950, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
-    acc_triad: { id: "acc_triad", type: "acc", name: "แหวนอสูรสามภพ", price: 1300, tier: "high", bonuses: { atk: 35, matk: 35, crit: 8 } },
+    helm_abyss: { id: "helm_abyss", weight: 80, type: "helm", name: "เกรทเฮล์ม", price: 900, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 6 } },
+    eyes_judge: { id: "eyes_judge", weight: 10, type: "eyes", name: "ดวงตาผู้พิพากษาอเวจี", price: 850, tier: "high", bonuses: { crit: 12, accuracy: 12 } },
+    mouth_whisper: { id: "mouth_whisper", weight: 20, type: "mouth", name: "หน้ากากกระซิบมรณะ", price: 800, tier: "high", bonuses: { mp: 80, mpRegen: 8 } },
+    armor_ruin: { id: "armor_ruin", weight: 220, type: "armor", name: "เกราะแผ่น", price: 1400, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 10 } },
+    shield_eclipse: { id: "shield_eclipse", weight: 150, type: "shield", name: "โล่ทาวเวอร์", price: 1100, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 8 } },
+    cloak_night: { id: "cloak_night", weight: 50, type: "cloak", name: "ผ้าคลุมทหาร", price: 1000, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
+    boots_gale: { id: "boots_gale", weight: 60, type: "boots", name: "รองเท้าเหล็ก", price: 950, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
+    acc_triad: { id: "acc_triad", weight: 10, type: "acc", name: "แหวนอสูรสามภพ", price: 1300, tier: "high", bonuses: { atk: 35, matk: 35, crit: 8 } },
   };
 
   DATA.ITEMS_BY_TYPE = {};
@@ -1112,21 +1309,50 @@
     const n = Math.floor(Number(plus) || 0);
     return DATA.REFINE_COST[n] == null ? 0 : DATA.REFINE_COST[n];
   };
+  DATA.refineOreFor = function (item, nextPlus) {
+    const n = Math.floor(Number(nextPlus) || 0);
+    const type = item && item.type;
+    if (n >= 1 && n <= 4) return "ore_phracon";
+    if (n >= 5 && n <= 10) {
+      if (type === "weapon") return "ore_oridecon";
+      if (DATA.isWearableRefinable(type)) return "ore_elunium";
+    }
+    return null;
+  };
   DATA.hardFromPlus = function (plus) {
     const n = Math.max(0, Math.floor(Number(plus) || 0));
     return n * DATA.HARD_PER_REFINE;
   };
 
   DATA.POTIONS = {
-    red: { id: "red", name: "ยาแดง", emoji: "🧪", healHp: 200, healMp: 0, price: 25, desc: "ฟื้น HP 200" },
-    orange: { id: "orange", name: "ยาส้ม", emoji: "🟠", healHp: 600, healMp: 0, price: 80, desc: "ฟื้น HP 600" },
-    white: { id: "white", name: "ยาขาว", emoji: "⚪", healHp: 1200, healMp: 0, price: 180, desc: "ฟื้น HP 1200" },
-    blue: { id: "blue", name: "ยาฟ้า", emoji: "🔵", healHp: 0, healMp: 80, price: 60, desc: "ฟื้น MP 80" },
-    berserk: { id: "berserk", name: "Berserk Potion", emoji: "💢", healHp: 0, healMp: 0, price: 250, aspdMod: DATA.BERSERK_ASPD_MOD, durationMs: DATA.BERSERK_DURATION_MS, desc: "Potion ASPD +20% นาน 30 นาที" },
+    red: { id: "red", weight: 70, name: "ยาแดง", emoji: "🧪", healHp: 200, healMp: 0, price: 25, desc: "ฟื้น HP 200" },
+    orange: { id: "orange", weight: 10, name: "ยาส้ม", emoji: "🟠", healHp: 600, healMp: 0, price: 80, desc: "ฟื้น HP 600" },
+    white: { id: "white", weight: 15, name: "ยาขาว", emoji: "⚪", healHp: 1200, healMp: 0, price: 180, desc: "ฟื้น HP 1200" },
+    blue: { id: "blue", weight: 15, name: "ยาฟ้า", emoji: "🔵", healHp: 0, healMp: 80, price: 60, desc: "ฟื้น MP 80" },
+    berserk: { id: "berserk", weight: 20, name: "Berserk Potion", emoji: "💢", healHp: 0, healMp: 0, price: 250, aspdMod: DATA.BERSERK_ASPD_MOD, durationMs: DATA.BERSERK_DURATION_MS, desc: "Potion ASPD +20% นาน 30 นาที" },
   };
   DATA.POTION_ORDER = ["red", "orange", "white", "blue", "berserk"];
   DATA.emptyPotions = function () {
     return { red: 0, orange: 0, white: 0, blue: 0, berserk: 0 };
+  };
+
+  DATA.MATERIALS = {
+    jellopy: { id: "jellopy", weight: 10, name: "เจลลอปี้", emoji: "🟡" },
+    clover: { id: "clover", weight: 2, name: "ใบโคลเวอร์", emoji: "🍀" },
+    feather: { id: "feather", weight: 2, name: "ขนนก", emoji: "🪶" },
+    ore_phracon: { id: "ore_phracon", weight: 20, name: "แร่ไฟคอน", emoji: "🪨" },
+    ore_elunium: { id: "ore_elunium", weight: 20, name: "เอลูเนียม", emoji: "💠" },
+    ore_oridecon: { id: "ore_oridecon", weight: 20, name: "โอริเดคอน", emoji: "🔷" },
+  };
+
+  DATA.lootName = function (id) {
+    const pot = DATA.POTIONS && DATA.POTIONS[id];
+    if (pot && pot.name) return pot.name;
+    const mat = DATA.MATERIALS && DATA.MATERIALS[id];
+    if (mat && mat.name) return mat.name;
+    const it = DATA.ITEMS && DATA.ITEMS[id];
+    if (it && it.name) return it.name;
+    return id;
   };
 
   DATA.activePotionAspdMod = function (buffs, now) {

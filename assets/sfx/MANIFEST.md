@@ -21,9 +21,13 @@ All files: Ogg Vorbis, 44100 Hz, stereo, peak normalized to −1 dBFS.
 | `mob_savage_babe_attack.ogg` | 0.290s | Gore / charge grunt. | Mob hits player: field mob id savage_babe. |
 | `mob_elder_willow_attack.ogg` | 0.290s | Burning branch crack + flame whoosh. | Mob hits player: field mob id elder_willow. |
 | `mob_skeleton_attack.ogg` | 0.230s | Bone rattle slash. | Mob hits player: field mob id skeleton. |
+| `ui_refine_hit.ogg` | 0.235s | Hammer-on-anvil clang + short wood/anvil body. Classic RO smith homage, original metal-on-metal workshop. | Player clicks ตีบวก (refine): play on each refine strike. |
+| `ui_refine_ok.ogg` | 0.455s | Bright sparkle / holy chime / small fanfare — high, clear, rewarding. | Refine SUCCESS. |
+| `ui_refine_fail.ogg` | 0.355s | Dull muted thud + short descending tone. Disappointing, not catastrophic (item is safe). | Refine FAIL (safe: plus stays, only Zeno lost). |
 
 ## Notes
 
 - `hit_slash.ogg` is gated so the body is gone by ~180 ms and the file is silent by 280 ms — safe to overlap at 7 hits/sec.
 - Each mob file is a unique pitch/texture family so field packs do not blend into one hit sound.
 - Start padding is under 20 ms. Fade to digital zero at the end of every file.
+- `ui_refine_hit.ogg` / `ui_refine_ok.ogg` / `ui_refine_fail.ogg` are UI refine cues (smith workshop / success chime / safe-fail thud). Fail is disappointing, not catastrophic — the item does not break.

@@ -105,95 +105,126 @@
     const rng = mulberry32(seed);
     const g = makeBlank(n);
     g.trails = {};
+    g.plain = {};
     const spawn = { x: 5, y: n - 6 };
     const gate = { x: 2, y: n - 4 };
+    const pockets = {
+      near: { x: 18, y: 82, rx: 9, ry: 7, open: 0.88, name: "ทุ่งใกล้" },
+      mid: { x: 32, y: 70, rx: 8, ry: 7, open: 0.62, name: "ป่ากลาง" },
+      far: { x: 38, y: 58, rx: 7, ry: 6, open: 0.5, name: "ปากป่า" },
+      deep: { x: 52, y: 48, rx: 10, ry: 9, open: 0.42, name: "ป่าลึก" },
+    };
+    g.pockets = pockets;
 
-    function inDisk(x, y, cx, cy, r) {
-      return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
+    function manh(ax, ay, bx, by) {
+      return Math.abs(ax - bx) + Math.abs(ay - by);
     }
-    function reserved(x, y) {
-      return inDisk(x, y, spawn.x, spawn.y, 5) || inDisk(x, y, gate.x, gate.y, 5);
+    function isPlainTile(x, y) {
+      // first camera + pad so forest is off-screen / distant treeline
+      if (x <= 50 && y >= 70) return true;
+      return manh(x, y, spawn.x, spawn.y) < 32;
     }
-
-    const groveWant = 14 + Math.floor(rng() * 9);
-    const groves = [];
-    let groveTries = 0;
-    while (groves.length < groveWant && groveTries < 800) {
-      groveTries += 1;
-      const r = 3 + Math.floor(rng() * 4);
-      const x = 4 + Math.floor(rng() * (n - 8));
-      const y = 4 + Math.floor(rng() * (n - 8));
-      if (reserved(x, y)) continue;
-      let ok = true;
-      for (let i = 0; i < groves.length; i++) {
-        const o = groves[i];
-        const gap = r + o.r + 2;
-        if (Math.abs(o.x - x) + Math.abs(o.y - y) < gap) {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok) continue;
-      groves.push({ x: x, y: y, r: r });
-    }
-    groves.forEach(function (gv) {
-      for (let y = gv.y - gv.r; y <= gv.y + gv.r; y++) {
-        for (let x = gv.x - gv.r; x <= gv.x + gv.r; x++) {
-          if (y <= 0 || x <= 0 || y >= n - 1 || x >= n - 1) continue;
-          if (reserved(x, y)) continue;
-          const dx = x - gv.x;
-          const dy = y - gv.y;
-          if (dx * dx + dy * dy > gv.r * gv.r) continue;
-          if (rng() < 0.16) continue;
-          g.walkable[y][x] = false;
-          const roll = rng();
-          g.decor.push({ x: x, y: y, kind: roll < 0.72 ? "tree" : roll < 0.9 ? "fern" : "rock" });
-        }
-      }
-    });
-    g.groveCount = groves.length;
-
     function markTrail(x, y) {
       if (x <= 0 || y <= 0 || x >= n - 1 || y >= n - 1) return;
       g.walkable[y][x] = true;
       g.trails[x + "," + y] = true;
     }
-    function carveTrail(x0, y0, x1, y1) {
-      let x = x0;
-      let y = y0;
-      const steps = Math.abs(x1 - x0) + Math.abs(y1 - y0) + 4;
-      for (let i = 0; i < steps; i++) {
-        markTrail(x, y);
-        if (x + 1 < n - 1) markTrail(x + 1, y);
-        if (y + 1 < n - 1) markTrail(x, y + 1);
-        if (x === x1 && y === y1) break;
-        if (x !== x1) x += x < x1 ? 1 : -1;
-        else y += y < y1 ? 1 : -1;
+    function ribbonH(x0, x1, y, bulge) {
+      const xa = Math.min(x0, x1);
+      const xb = Math.max(x0, x1);
+      const sign = hashXY(x0 + 3, y + 7) & 1 ? 1 : -1;
+      const span = xb - xa || 1;
+      for (let x = xa; x <= xb; x++) {
+        const t = (x - xa) / span;
+        const yOff = Math.round(Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI) * bulge * sign);
+        const yy = Math.max(1, Math.min(n - 3, y + yOff));
+        markTrail(x, yy);
+        markTrail(x, yy + 1);
       }
     }
-    function clampPt(x, y) {
-      return {
-        x: Math.max(2, Math.min(n - 3, x | 0)),
-        y: Math.max(2, Math.min(n - 3, y | 0)),
-      };
-    }
-    function winding(x0, y0, x1, y1, bends) {
-      const pts = [{ x: x0, y: y0 }];
-      for (let i = 1; i <= bends; i++) {
-        const t = i / (bends + 1);
-        const jx = Math.floor((rng() - 0.5) * 24);
-        const jy = Math.floor((rng() - 0.5) * 24);
-        pts.push(clampPt(x0 + (x1 - x0) * t + jx, y0 + (y1 - y0) * t + jy));
+    function ribbonV(y0, y1, x, bulge) {
+      const ya = Math.min(y0, y1);
+      const yb = Math.max(y0, y1);
+      const sign = hashXY(x + 11, y0 + 5) & 1 ? 1 : -1;
+      const span = yb - ya || 1;
+      for (let y = ya; y <= yb; y++) {
+        const t = (y - ya) / span;
+        const xOff = Math.round(Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI) * bulge * sign);
+        const xx = Math.max(1, Math.min(n - 3, x + xOff));
+        markTrail(xx, y);
+        markTrail(xx + 1, y);
       }
-      pts.push({ x: x1, y: y1 });
-      for (let i = 0; i < pts.length - 1; i++) {
-        carveTrail(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+    }
+    function ribbonTo(x0, y0, x1, y1, bulge) {
+      bulge = bulge == null ? 2 : bulge;
+      const hv = hashXY(x0 * 3 + x1, y0 * 5 + y1) & 1;
+      if (hv) {
+        ribbonH(x0, x1, y0, bulge);
+        ribbonV(y0, y1, x1, bulge);
+      } else {
+        ribbonV(y0, y1, x0, bulge);
+        ribbonH(x0, x1, y1, bulge);
+      }
+    }
+    function clearPocket(cx, cy, rx, ry, open) {
+      const pad = 2;
+      for (let y = cy - ry - pad; y <= cy + ry + pad; y++) {
+        for (let x = cx - rx - pad; x <= cx + rx + pad; x++) {
+          if (y <= 0 || x <= 0 || y >= n - 1 || x >= n - 1) continue;
+          const nx = (x - cx) / rx;
+          const ny = (y - cy) / ry;
+          const rr = nx * nx + ny * ny;
+          if (rr > 1) {
+            if (rr < 1.22 && hashXY(x + 19, y + 23) % 7 === 0) g.walkable[y][x] = true;
+            continue;
+          }
+          if (rr <= open * open) g.walkable[y][x] = true;
+          else if (hashXY(x, y) % 5 > 1) g.walkable[y][x] = true;
+        }
+      }
+    }
+    function floodKeep() {
+      const seen = {};
+      const q = [{ x: spawn.x, y: spawn.y }];
+      seen[spawn.x + "," + spawn.y] = true;
+      while (q.length) {
+        const c = q.pop();
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let i = 0; i < dirs.length; i++) {
+          const nx = c.x + dirs[i][0];
+          const ny = c.y + dirs[i][1];
+          if (ny <= 0 || nx <= 0 || ny >= n - 1 || nx >= n - 1) continue;
+          const k = nx + "," + ny;
+          if (seen[k] || !g.walkable[ny][nx]) continue;
+          seen[k] = true;
+          q.push({ x: nx, y: ny });
+        }
+      }
+      for (let y = 1; y < n - 1; y++) {
+        for (let x = 1; x < n - 1; x++) {
+          if (g.walkable[y][x] && !seen[x + "," + y]) {
+            g.walkable[y][x] = false;
+            delete g.trails[x + "," + y];
+            g.decor.push({ x: x, y: y, kind: "tree" });
+          }
+        }
       }
     }
 
-    clearDisk(g, spawn.x, spawn.y, 5);
-    clearDisk(g, gate.x, gate.y, 5);
-    // 5-wide x 4-deep X pad around origin (2, n-4); every X tile warps to city.
+    for (let y = 1; y < n - 1; y++) {
+      for (let x = 1; x < n - 1; x++) {
+        g.walkable[y][x] = false;
+        const h = hashXY(x + 41, y + 17) % 100;
+        g.decor.push({ x: x, y: y, kind: h < 8 ? "fern" : h < 13 ? "rock" : "tree" });
+      }
+    }
+
+    clearPocket(spawn.x, spawn.y, 7, 6, 1);
+    clearPocket(gate.x, gate.y, 6, 5, 1);
+    clearPocket(pockets.mid.x, pockets.mid.y, pockets.mid.rx, pockets.mid.ry, pockets.mid.open);
+    clearPocket(pockets.far.x, pockets.far.y, pockets.far.rx, pockets.far.ry, pockets.far.open);
+    clearPocket(pockets.deep.x, pockets.deep.y, pockets.deep.rx, pockets.deep.ry, pockets.deep.open);
+
     for (let y = gate.y - 2; y <= gate.y + 2; y++) {
       for (let x = gate.x - 1; x <= gate.x + 2; x++) {
         if (y <= 0 || x <= 0 || y >= n - 1 || x >= n - 1) continue;
@@ -201,36 +232,129 @@
         g.cells[x + "," + y] = "X";
       }
     }
-    winding(spawn.x, spawn.y, n - 12, 14, 3);
-    winding(gate.x, gate.y, 78, 72, 2);
-    g.decor = g.decor.filter(function (d) {
-      return !g.walkable[d.y][d.x];
-    });
 
-    const seen = {};
-    const q = [{ x: spawn.x, y: spawn.y }];
-    seen[spawn.x + "," + spawn.y] = true;
-    while (q.length) {
-      const c = q.pop();
-      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-      for (let i = 0; i < dirs.length; i++) {
-        const nx = c.x + dirs[i][0];
-        const ny = c.y + dirs[i][1];
-        if (ny <= 0 || nx <= 0 || ny >= n - 1 || nx >= n - 1) continue;
-        const k = nx + "," + ny;
-        if (seen[k] || !g.walkable[ny][nx]) continue;
-        seen[k] = true;
-        q.push({ x: nx, y: ny });
+    // 2-tile spine. Perpendiculars start 1 tile off the joint so sine bulge
+    // cannot plus-smear the 2-wide corridor.
+    ribbonH(gate.x, spawn.x, spawn.y, 0.5);
+    ribbonV(gate.y, spawn.y, gate.x, 0.4);
+    ribbonV(spawn.y, 91, spawn.x, 0.6);
+    ribbonH(spawn.x, 32, 90, 1.2);
+    ribbonV(89, 82, 18, 1.2);
+    const firstRibbon = {};
+    Object.keys(g.trails).forEach(function (k) {
+      firstRibbon[k] = true;
+    });
+    ribbonV(89, 58, 32, 1.25);
+    ribbonH(33, 52, 58, 1.2);
+    ribbonV(57, 48, 52, 1.2);
+    ribbonH(32, 25, 72, 1);
+
+    const xCells = [];
+    Object.keys(g.cells).forEach(function (k) {
+      if (g.cells[k] !== "X") return;
+      const p = k.split(",");
+      xCells.push({ x: Number(p[0]), y: Number(p[1]) });
+    });
+    const firstRibbonList = Object.keys(firstRibbon).map(function (k) {
+      const p = k.split(",");
+      return { x: Number(p[0]), y: Number(p[1]) };
+    });
+    function chebNearList(x, y, list, rad) {
+      for (let i = 0; i < list.length; i++) {
+        if (Math.max(Math.abs(list[i].x - x), Math.abs(list[i].y - y)) <= rad) return true;
       }
+      return false;
     }
+
+    // Flat hunting plain: first camera + pad, plus a small manh disk at spawn.
     for (let y = 1; y < n - 1; y++) {
       for (let x = 1; x < n - 1; x++) {
-        if (g.walkable[y][x] && !seen[x + "," + y]) {
-          g.walkable[y][x] = false;
-          g.decor.push({ x: x, y: y, kind: "tree" });
-        }
+        if (!isPlainTile(x, y)) continue;
+        g.plain[x + "," + y] = true;
+        g.walkable[y][x] = true;
       }
     }
+
+    const candidates = [];
+    for (let y = 1; y < n - 1; y++) {
+      for (let x = 1; x < n - 1; x++) {
+        const d = manh(x, y, spawn.x, spawn.y);
+        if (d < 12) continue;
+        if (!isPlainTile(x, y)) continue;
+        if (x <= 44 && y >= 78) continue;
+        if (x <= 14 && y >= 88) continue;
+        if (g.trails[x + "," + y]) continue;
+        if (manh(x, y, gate.x, gate.y) < 10) continue;
+        if (chebNearList(x, y, xCells, 4)) continue;
+        if (chebNearList(x, y, firstRibbonList, 3)) continue;
+        candidates.push({ x: x, y: y });
+      }
+    }
+    candidates.sort(function (a, b) {
+      return hashXY(a.x + 91, a.y + 53) - hashXY(b.x + 91, b.y + 53);
+    });
+    const landmarks = [];
+    function takeLandmarks(sep, want) {
+      for (let i = 0; i < candidates.length && landmarks.length < want; i++) {
+        const c = candidates[i];
+        let ok = true;
+        for (let j = 0; j < landmarks.length; j++) {
+          if (manh(c.x, c.y, landmarks[j].x, landmarks[j].y) < sep) {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok) continue;
+        landmarks.push(c);
+      }
+    }
+    takeLandmarks(8, 6);
+    if (landmarks.length < 4) takeLandmarks(5, 6);
+    if (landmarks.length < 4) takeLandmarks(3, 6);
+
+    const landmarkAt = {};
+    landmarks.forEach(function (s) {
+      landmarkAt[s.x + "," + s.y] = true;
+      g.walkable[s.y][s.x] = false;
+    });
+
+    g.decor = g.decor.filter(function (d) {
+      if (isPlainTile(d.x, d.y)) return false;
+      return !g.walkable[d.y][d.x];
+    });
+    landmarks.forEach(function (s) {
+      const kind = hashXY(s.x + 11, s.y + 7) % 3 === 0 ? "rock" : "tree";
+      g.decor.push({ x: s.x, y: s.y, kind: kind });
+    });
+
+    floodKeep();
+
+    // Never let floodKeep re-forest the plain. Landmarks stay; everything else stays open.
+    for (let y = 1; y < n - 1; y++) {
+      for (let x = 1; x < n - 1; x++) {
+        if (!isPlainTile(x, y)) continue;
+        g.plain[x + "," + y] = true;
+        g.walkable[y][x] = !landmarkAt[x + "," + y];
+      }
+    }
+    g.decor = g.decor.filter(function (d) {
+      if (isPlainTile(d.x, d.y)) return !!landmarkAt[d.x + "," + d.y];
+      return !g.walkable[d.y][d.x];
+    });
+    landmarks.forEach(function (s) {
+      const has = g.decor.some(function (d) {
+        return d.x === s.x && d.y === s.y;
+      });
+      if (!has) {
+        const kind = hashXY(s.x + 11, s.y + 7) % 3 === 0 ? "rock" : "tree";
+        g.decor.push({ x: s.x, y: s.y, kind: kind });
+      }
+    });
+
+    const decorAt = {};
+    g.decor.forEach(function (d) { decorAt[d.x + "," + d.y] = d; });
+    g.decorAt = decorAt;
+
     const nearTypes = ["poring", "fabre", "lunatic", "willow", "condor"];
     const midTypes = ["wolf", "poporing", "chonchon", "roda_frog"];
     const farTypes = ["spore", "rocker", "steel_chonchon"];
@@ -241,30 +365,42 @@
       if (dist < 74) return farTypes[slot % farTypes.length];
       return deepTypes[slot % deepTypes.length];
     }
-    const mobs = [];
-    let tries = 0;
-    while (mobs.length < 48 && tries < 8000) {
-      tries += 1;
-      const x = 2 + Math.floor(rng() * (n - 4));
-      const y = 2 + Math.floor(rng() * (n - 4));
-      if (!g.walkable[y][x]) continue;
-      const dist = Math.abs(x - spawn.x) + Math.abs(y - spawn.y);
-      if (dist < 8) continue;
-      if (Math.abs(x - gate.x) + Math.abs(y - gate.y) < 6) continue;
-      let far = true;
-      for (let i = 0; i < mobs.length; i++) {
-        if (Math.abs(mobs[i].x - x) + Math.abs(mobs[i].y - y) < 6) {
-          far = false;
-          break;
-        }
+    function isTrail(x, y) {
+      return !!(g.trails && g.trails[x + "," + y]);
+    }
+
+    const nearOpenTiles = [];
+    const pocketTiles = [];
+    const walkTiles = [];
+    for (let y = 2; y < n - 2; y++) {
+      for (let x = 2; x < n - 2; x++) {
+        if (!g.walkable[y][x]) continue;
+        const t = { x: x, y: y };
+        walkTiles.push(t);
+        if (!isTrail(x, y)) pocketTiles.push(t);
+        const d = manh(x, y, spawn.x, spawn.y);
+        if (d >= 8 && d < 30) nearOpenTiles.push(t);
       }
-      if (!far) continue;
-      const mid = pickBand(dist, mobs.length);
-      mobs.push({ uid: "m" + x + "," + y, monsterId: mid, x: x, y: y });
     }
-    function manh(ax, ay, bx, by) {
-      return Math.abs(ax - bx) + Math.abs(ay - by);
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const t = arr[i];
+        arr[i] = arr[j];
+        arr[j] = t;
+      }
+      return arr;
     }
+    shuffle(nearOpenTiles);
+    shuffle(pocketTiles);
+    shuffle(walkTiles);
+    nearOpenTiles.sort(function (a, b) {
+      const at = isTrail(a.x, a.y) ? 1 : 0;
+      const bt = isTrail(b.x, b.y) ? 1 : 0;
+      return at - bt;
+    });
+
+    const mobs = [];
     function occupied(x, y, sep) {
       if (manh(x, y, spawn.x, spawn.y) < 8) return true;
       if (manh(x, y, gate.x, gate.y) < 6) return true;
@@ -273,24 +409,34 @@
       }
       return false;
     }
-    function findBandTile(lo, hi) {
-      for (let t = 0; t < 4000; t++) {
-        const x = 2 + Math.floor(rng() * (n - 4));
-        const y = 2 + Math.floor(rng() * (n - 4));
-        const dist = manh(x, y, spawn.x, spawn.y);
-        if (dist < lo || dist > hi) continue;
-        if (!g.walkable[y] || !g.walkable[y][x]) continue;
-        if (occupied(x, y, 6)) continue;
-        return { x: x, y: y };
+    function tryPlaceFrom(list, sep, limit) {
+      for (let i = 0; i < list.length && mobs.length < limit; i++) {
+        const t = list[i];
+        if (occupied(t.x, t.y, sep)) continue;
+        const dist = manh(t.x, t.y, spawn.x, spawn.y);
+        if (dist < 8) continue;
+        const mid = pickBand(dist, mobs.length);
+        mobs.push({ uid: "m" + t.x + "," + t.y, monsterId: mid, x: t.x, y: t.y });
       }
-      for (let sep = 5; sep >= 2; sep--) {
-        for (let y = 2; y < n - 2; y++) {
-          for (let x = 2; x < n - 2; x++) {
-            const dist = manh(x, y, spawn.x, spawn.y);
+    }
+    tryPlaceFrom(nearOpenTiles, 5, 48);
+    tryPlaceFrom(pocketTiles, 6, 48);
+    if (mobs.length < 48) tryPlaceFrom(nearOpenTiles, 4, 48);
+    if (mobs.length < 48) tryPlaceFrom(pocketTiles, 4, 48);
+    if (mobs.length < 48) tryPlaceFrom(pocketTiles, 3, 48);
+    if (mobs.length < 48) tryPlaceFrom(walkTiles, 4, 48);
+    if (mobs.length < 48) tryPlaceFrom(walkTiles, 2, 48);
+
+    function findBandTile(lo, hi) {
+      const pools = lo < 30 ? [nearOpenTiles, pocketTiles, walkTiles] : [pocketTiles, walkTiles];
+      for (let p = 0; p < pools.length; p++) {
+        for (let sep = 6; sep >= 2; sep--) {
+          for (let i = 0; i < pools[p].length; i++) {
+            const t = pools[p][i];
+            const dist = manh(t.x, t.y, spawn.x, spawn.y);
             if (dist < lo || dist > hi) continue;
-            if (!g.walkable[y] || !g.walkable[y][x]) continue;
-            if (occupied(x, y, sep)) continue;
-            return { x: x, y: y };
+            if (occupied(t.x, t.y, sep)) continue;
+            return t;
           }
         }
       }
@@ -386,6 +532,9 @@
       }
     }
 
+    const LOCK_BLOCK = "#DCHNRTrhF";
+    const LOCK_NPC = "WPSKG";
+
     function put(x, y, ch, walk) {
       if (y < 0 || x < 0 || y >= n || x >= n) return;
       kind[y][x] = ch;
@@ -412,6 +561,83 @@
       for (let i = 0; i < w; i++) fill(x + i, y0, x + i, y1, ".", true);
     }
 
+    function lockedTile(ch) {
+      return !ch || LOCK_BLOCK.indexOf(ch) >= 0 || LOCK_NPC.indexOf(ch) >= 0;
+    }
+
+    const avenue = [];
+    for (let y = 0; y < n; y++) avenue[y] = [];
+
+    function paintCobble(x, y, mark) {
+      if (y < wallT || x < wallT || y > n - 1 - wallT || x > n - 1 - wallT) return;
+      const ch = kind[y][x];
+      if (ch === "#") return;
+      if (lockedTile(ch) && ch !== ".") return;
+      if (ch === "~" || ch === "f" || ch === "L" || ch === "B" || ch === "A") {
+        walks[y][x] = true;
+        if (mark) avenue[y][x] = true;
+        return;
+      }
+      put(x, y, ".", true);
+      if (mark) avenue[y][x] = true;
+    }
+
+    function ribbonH(x0, x1, y, bulge) {
+      const xa = Math.min(x0, x1);
+      const xb = Math.max(x0, x1);
+      const sign = hashXY(x0 + 3, y + 7) & 1 ? 1 : -1;
+      const span = xb - xa || 1;
+      for (let x = xa; x <= xb; x++) {
+        const t = (x - xa) / span;
+        const yOff = Math.round(Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI) * bulge * sign);
+        paintCobble(x, y + yOff, true);
+        paintCobble(x, y + yOff + 1, true);
+      }
+    }
+    function ribbonV(y0, y1, x, bulge) {
+      const ya = Math.min(y0, y1);
+      const yb = Math.max(y0, y1);
+      const sign = hashXY(x + 11, y0 + 5) & 1 ? 1 : -1;
+      const span = yb - ya || 1;
+      for (let y = ya; y <= yb; y++) {
+        const t = (y - ya) / span;
+        const xOff = Math.round(Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI) * bulge * sign);
+        paintCobble(x + xOff, y, true);
+        paintCobble(x + xOff + 1, y, true);
+      }
+    }
+
+    function wobbleRing() {
+      function edge(horizontal, a0, a1, fixed, inward, width) {
+        const dir = a1 >= a0 ? 1 : -1;
+        let i = 0;
+        let off = 0;
+        let next = 5 + (hashXY(a0 + 2, fixed + 9) % 4);
+        for (let a = a0; a !== a1 + dir; a += dir) {
+          if (i && i === next) {
+            off = hashXY(a, fixed + i * 3) % 3 === 0 ? 1 : 0;
+            next = i + 5 + (hashXY(a * 5, fixed + 19) % 4);
+          }
+          const f = fixed + inward * off;
+          for (let w = 0; w < width; w++) {
+            const t = f + inward * w;
+            if (t < wallT || t > n - 1 - wallT) continue;
+            if (horizontal) paintCobble(a, t);
+            else paintCobble(t, a);
+          }
+          i += 1;
+        }
+      }
+      const inner0 = wallT;
+      const inner1 = n - 1 - wallT;
+      const east = n - wallT - ringT;
+      const south = n - wallT - ringT;
+      edge(true, inner0, inner1, inner0, 1, ringT);
+      edge(true, inner0, inner1, south, -1, ringT);
+      edge(false, inner0, inner1, inner0, 1, ringT);
+      edge(false, inner0, inner1, east, -1, ringT);
+    }
+
     const cx = Math.floor(n / 2);
     const cy = Math.floor(n / 2);
     const wallT = 2;
@@ -424,18 +650,15 @@
     fill(0, 0, wallT - 1, n - 1, "#", false);
     fill(n - wallT, 0, n - 1, n - 1, "#", false);
 
-    // 2. Ring road 2 tiles just inside the walls.
-    vStreet(wallT, wallT, n - 1 - wallT, ringT);
-    vStreet(n - wallT - ringT, wallT, n - 1 - wallT, ringT);
-    hStreet(wallT, n - 1 - wallT, wallT, ringT);
-    hStreet(wallT, n - 1 - wallT, n - wallT - ringT, ringT);
+    // 2. Ring road 2 tiles just inside the walls, wobble ±1 inward.
+    wobbleRing();
 
-    // 3. Main 3-wide cross, full span inside the walls.
-    vStreet(cx - 1, wallT, n - 1 - wallT, 3);
-    hStreet(wallT, n - 1 - wallT, cy - 1, 3);
-
-    // 4. Central plaza cobble.
-    fill(30, 30, 50, 50, "~", true);
+    // 3. No extra plaza slab — the 5×5 fountain rim is the cobble pad.
+    // 4. 2-wide S-ribbons attach at the rim, never through the fountain.
+    ribbonH(cx + 3, n - 5, cy, 2);
+    ribbonH(cx - 3, 24, cy, 2);
+    ribbonV(cy - 3, 17, cx, 2);
+    ribbonV(cy + 3, 56, cx, 2);
 
     // 5. Fountain: 3x3 blocked core, walkable 5x5 rim (do not block the rim).
     for (let dy = -2; dy <= 2; dy++) {
@@ -445,32 +668,6 @@
       }
     }
 
-    // 6. Lamps + flowers only on remaining plaza cobble.
-    [
-      [30, 30],
-      [cx, 30],
-      [50, 30],
-      [30, cy],
-      [50, cy],
-      [30, 50],
-      [cx, 50],
-      [50, 50],
-    ].forEach(function (s) {
-      if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "L", true);
-    });
-    [
-      [32, 31],
-      [48, 31],
-      [32, 49],
-      [48, 49],
-      [31, 36],
-      [49, 36],
-      [31, 44],
-      [49, 44],
-    ].forEach(function (s) {
-      if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "B", true);
-    });
-
     // 7. Castle NORTH (separate from church). Keep D, 3x3 K door, north avenue open.
     fill(34, 4, 46, 16, "D", false);
     fill(34, 4, 35, 5, "D", false);
@@ -478,7 +675,8 @@
     fill(34, 15, 35, 16, "D", false);
     fill(45, 15, 46, 16, "D", false);
     fill(39, 14, 41, 16, "K", true);
-    vStreet(39, 17, 29, 3);
+    // Short straight K-door apron so the warp pad stays obviously connected.
+    vStreet(39, 17, 19, 3);
 
     // 8. Church NE, own landmark. Body C, terracotta roof N, south courtyard.
     fill(52, 8, 62, 20, "C", false);
@@ -488,7 +686,7 @@
     }
     fill(53, 21, 61, 24, "~", true);
 
-    // 9. West market: W on the 3-wide street, 2 shop buildings (not a packed quarter).
+    // 9. West market: W on the street, 2 shop buildings (not a packed quarter).
     const wShop = { x: 24, y: 40 };
     put(wShop.x, wShop.y, "W", true);
     fill(23, 37, 25, 38, "H", false);
@@ -506,27 +704,64 @@
     fill(55, 46, 57, 46, "H", false);
     fill(55, 45, 57, 45, "R", false);
 
-    // 11. Kafra on the south plaza edge.
+    // 11. Kafra sits on the south ribbon (keep walk on the road, no extra stub).
     const kafra = { x: 38, y: 49 };
+    let kBest = 99;
+    for (let x = 34; x <= 46; x++) {
+      if (!walks[49] || !walks[49][x]) continue;
+      const ch = kind[49][x];
+      if (ch !== "." && ch !== "~" && ch !== "A" && ch !== "?") continue;
+      const d = Math.abs(x - 38);
+      if (d < kBest) {
+        kBest = d;
+        kafra.x = x;
+      }
+    }
     put(kafra.x, kafra.y, "S", true);
 
     // 12. East field gatehouse — only functional exit. 5 wide x 4 deep, every tile G.
     fill(n - 4, cy - 2, n - 1, cy + 2, "G", true);
     fill(n - 4, cy - 4, n - 1, cy - 3, "#", false);
     fill(n - 4, cy + 3, n - 1, cy + 4, "#", false);
+    // Short straight G-pad apron (warp).
+    hStreet(72, 75, cy - 1, 3);
 
-    // 13. Four 8x8 parks: grass A + a few trees T.
+    // 13. Parks: grass A + a few trees T. Irregular edges, not hard 8×8 boxes.
     function stampPark(x0, y0, x1, y1) {
-      fill(x0, y0, x1, y1, "A", true);
+      for (let y = y0 - 1; y <= y1 + 1; y++) {
+        for (let x = x0 - 1; x <= x1 + 1; x++) {
+          if (y < wallT || x < wallT || y > n - 1 - wallT || x > n - 1 - wallT) continue;
+          const ch = kind[y][x];
+          if (ch === "#" || (lockedTile(ch) && ch !== "." && ch !== "?" && ch !== "A")) continue;
+          if (ch === "f" || ch === "L" || ch === "B") continue;
+          const h = hashXY(x + 29, y + 41);
+          const inside = x >= x0 && x <= x1 && y >= y0 && y <= y1;
+          const corner =
+            (x <= x0 + 1 && y <= y0 + 1) ||
+            (x >= x1 - 1 && y <= y0 + 1) ||
+            (x <= x0 + 1 && y >= y1 - 1) ||
+            (x >= x1 - 1 && y >= y1 - 1);
+          if (inside) {
+            if (corner && h % 3 === 0) continue;
+            if ((x === x0 || x === x1 || y === y0 || y === y1) && h % 5 === 0) continue;
+            if (ch === "~") continue;
+            put(x, y, "A", true);
+          } else if ((ch === "." || ch === "?") && h % 4 === 0) {
+            put(x, y, "A", true);
+          }
+        }
+      }
       const spots = [
-        [x0 + 1, y0 + 1],
-        [x1 - 1, y0 + 1],
-        [x0 + 1, y1 - 1],
-        [x1 - 1, y1 - 1],
-        [Math.floor((x0 + x1) / 2), Math.floor((y0 + y1) / 2)],
+        [x0 + 1 + (hashXY(x0, y0) % 3), y0 + 2 + (hashXY(x0 + 2, y0) % 2)],
+        [x1 - 2 - (hashXY(x1, y0) % 2), y0 + 1 + (hashXY(x1, y0 + 3) % 3)],
+        [x0 + 2 + (hashXY(x0, y1) % 2), y1 - 2 - (hashXY(x0 + 4, y1) % 2)],
+        [x1 - 1 - (hashXY(x1, y1) % 3), y1 - 1 - (hashXY(x1 + 5, y1 + 1) % 2)],
+        [Math.floor((x0 + x1) / 2) + ((hashXY(x0 + x1, y0) % 3) - 1), Math.floor((y0 + y1) / 2) + ((hashXY(y0 + y1, x1) % 3) - 1)],
       ];
       spots.forEach(function (s) {
-        if (s[0] > x0 && s[0] < x1 && s[1] > y0 && s[1] < y1) put(s[0], s[1], "T", false);
+        if (s[0] > x0 && s[0] < x1 && s[1] > y0 && s[1] < y1 && kind[s[1]] && kind[s[1]][s[0]] === "A") {
+          put(s[0], s[1], "T", false);
+        }
       });
     }
     stampPark(6, 6, 13, 13);
@@ -535,7 +770,6 @@
     stampPark(64, 64, 71, 71);
 
     // 14. Airy house lots in SW / SE only. Each lot = 3-wide roof + 3-wide wall + yard.
-    //     Spaced with grass courtyards. Do not carpet vacant tiles with roofs.
     function stampLot(x0, y0) {
       let roofN = 0;
       for (let dx = 0; dx < 3; dx++) {
@@ -562,8 +796,8 @@
     ];
     let swLotN = 0;
     let seLotN = 0;
-    swLotPts.forEach(function (p) { if (stampLot(p[0], p[1])) swLotN += 1; });
-    seLotPts.forEach(function (p) { if (stampLot(p[0], p[1])) seLotN += 1; });
+    swLotPts.forEach(function (pt) { if (stampLot(pt[0], pt[1])) swLotN += 1; });
+    seLotPts.forEach(function (pt) { if (stampLot(pt[0], pt[1])) seLotN += 1; });
 
     // 15. Leftover vacant tiles become walkable grass courtyards, not roofs.
     for (let y = 0; y < n; y++) {
@@ -571,6 +805,184 @@
         if (kind[y][x] === "?") put(x, y, "A", true);
       }
     }
+
+    // After leftover A refill, bite cobble into park corners so they are not 8×8 boxes.
+    [
+      [6, 6, 13, 13],
+      [66, 8, 73, 15],
+      [8, 64, 15, 71],
+      [64, 64, 71, 71],
+    ].forEach(function (b) {
+      const x0 = b[0], y0 = b[1], x1 = b[2], y1 = b[3];
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const ch = kind[y][x];
+          if (ch !== "A") continue;
+          const h = hashXY(x + 51, y + 23);
+          const corner =
+            (x <= x0 + 1 && y <= y0 + 1) ||
+            (x >= x1 - 1 && y <= y0 + 1) ||
+            (x <= x0 + 1 && y >= y1 - 1) ||
+            (x >= x1 - 1 && y >= y1 - 1);
+          const edge = x === x0 || x === x1 || y === y0 || y === y1;
+          if ((corner && h % 2 === 0) || (edge && h % 3 === 0)) put(x, y, ".", true);
+        }
+      }
+      for (let y = y0 - 1; y <= y1 + 1; y++) {
+        for (let x = x0 - 1; x <= x1 + 1; x++) {
+          if (y < wallT || x < wallT || y > n - 1 - wallT || x > n - 1 - wallT) continue;
+          if (x >= x0 && x <= x1 && y >= y0 && y <= y1) continue;
+          const ch = kind[y][x];
+          if (ch !== ".") continue;
+          if (hashXY(x + 7, y + 11) % 3 === 0) put(x, y, "A", true);
+        }
+      }
+    });
+
+    // Grass / cobble interlock: extra lawn on some street corners, nibble path edges.
+    for (let y = wallT; y <= n - 1 - wallT; y++) {
+      for (let x = wallT; x <= n - 1 - wallT; x++) {
+        const ch = kind[y][x];
+        if (ch !== "." && ch !== "~") continue;
+        let grassN = 0;
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let d = 0; d < 4; d++) {
+          const nx = x + dirs[d][0];
+          const ny = y + dirs[d][1];
+          if (ny < 0 || nx < 0 || ny >= n || nx >= n) continue;
+          if (kind[ny][nx] === "A" || kind[ny][nx] === "T") grassN += 1;
+        }
+        if (avenue[y] && avenue[y][x]) continue;
+        const h = hashXY(x + 73, y + 91);
+        if (grassN >= 2 && h % 5 === 0) put(x, y, "A", true);
+        else if (grassN === 1 && h % 11 === 0) put(x, y, "A", true);
+      }
+    }
+
+    // 6. Lamps + flowers only on remaining plaza cobble (after organic plaza / nibble).
+    [
+      [Math.round(cx - 7), Math.round(cy - 6)],
+      [cx, Math.round(cy - 8)],
+      [Math.round(cx + 7), Math.round(cy - 6)],
+      [Math.round(cx - 8), cy],
+      [Math.round(cx + 8), cy],
+      [Math.round(cx - 7), Math.round(cy + 6)],
+      [cx, Math.round(cy + 8)],
+      [Math.round(cx + 7), Math.round(cy + 6)],
+    ].forEach(function (s) {
+      if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "L", true);
+    });
+    [
+      [Math.round(cx - 5), Math.round(cy - 4)],
+      [Math.round(cx + 5), Math.round(cy - 4)],
+      [Math.round(cx - 5), Math.round(cy + 4)],
+      [Math.round(cx + 5), Math.round(cy + 4)],
+      [Math.round(cx - 6), Math.round(cy - 1)],
+      [Math.round(cx + 6), Math.round(cy - 1)],
+      [Math.round(cx - 3), Math.round(cy + 6)],
+      [Math.round(cx + 3), Math.round(cy + 6)],
+    ].forEach(function (s) {
+      if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "B", true);
+    });
+
+    // Spawn / warp aprons stay walkable.
+    const spawn = { x: cx, y: 51 };
+    if (!walks[spawn.y] || !walks[spawn.y][spawn.x]) {
+      const ch = kind[spawn.y][spawn.x];
+      if (ch && "FTH#RrhCDN".indexOf(ch) >= 0) put(spawn.x, spawn.y, ".", true);
+      else put(spawn.x, spawn.y, ch && ch !== "?" ? ch : ".", true);
+    }
+    const gateSpawn = { x: 74, y: cy };
+    if (!walks[gateSpawn.y] || !walks[gateSpawn.y][gateSpawn.x]) {
+      gateSpawn.x = 75;
+      if (!walks[gateSpawn.y][gateSpawn.x]) put(gateSpawn.x, gateSpawn.y, ".", true);
+    }
+    const castleSpawn = { x: cx, y: 18 };
+    if (!walks[castleSpawn.y] || !walks[castleSpawn.y][castleSpawn.x]) {
+      const ch = kind[castleSpawn.y][castleSpawn.x];
+      if (!ch || "FTH#RrhCDN".indexOf(ch) < 0) put(castleSpawn.x, castleSpawn.y, ch && ch !== "?" ? ch : ".", true);
+    }
+
+    function cityKey(x, y) {
+      return x + "," + y;
+    }
+    function bfsWalk(sx, sy) {
+      const seen = {};
+      if (!walks[sy] || !walks[sy][sx]) return seen;
+      const q = [[sx, sy]];
+      seen[cityKey(sx, sy)] = true;
+      let qi = 0;
+      while (qi < q.length) {
+        const c = q[qi++];
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let d = 0; d < 4; d++) {
+          const nx = c[0] + dirs[d][0];
+          const ny = c[1] + dirs[d][1];
+          if (ny < 0 || nx < 0 || ny >= n || nx >= n) continue;
+          const k = cityKey(nx, ny);
+          if (seen[k] || !walks[ny][nx]) continue;
+          seen[k] = true;
+          q.push([nx, ny]);
+        }
+      }
+      return seen;
+    }
+    function carveRibbon(x0, y0, x1, y1) {
+      let x = x0;
+      let y = y0;
+      const horiz = Math.abs(x1 - x0) >= Math.abs(y1 - y0);
+      for (let step = 0; step < n * 4; step++) {
+        if (x !== x1) x += x < x1 ? 1 : -1;
+        else if (y !== y1) y += y < y1 ? 1 : -1;
+        const stamps = horiz ? [[0, 0], [0, 1]] : [[0, 0], [1, 0]];
+        for (let s = 0; s < stamps.length; s++) {
+          const tx = x + stamps[s][0];
+          const ty = y + stamps[s][1];
+          if (ty <= 0 || tx <= 0 || ty >= n - 1 || tx >= n - 1) continue;
+          const ch = kind[ty][tx];
+          if (ch === "#" || ch === "F" || ch === "D" || ch === "C" || ch === "N") continue;
+          if (ch === "H" || ch === "h" || ch === "R" || ch === "r" || ch === "T") continue;
+          if (!walks[ty][tx]) {
+            if (!ch || ch === "?" || ch === "." || ch === "A" || ch === "~" || ch === "f") {
+              if (ch === "?" || !ch) put(tx, ty, ".", true);
+              else walks[ty][tx] = true;
+            }
+          }
+        }
+        if (x === x1 && y === y1) break;
+      }
+    }
+    const reachGoals = [
+      { name: "W", x: 24, y: 40 },
+      { name: "P", x: 56, y: 40 },
+      { name: "S", x: 38, y: 49 },
+      { name: "G", x: 78, y: 40 },
+      { name: "K", x: 40, y: 16 },
+      { name: "fountain-rim", x: 40, y: 38 },
+    ];
+    const reach = { from: { x: 40, y: 51 }, goals: {}, repaired: [] };
+    let seen = bfsWalk(40, 51);
+    reachGoals.forEach(function (g) {
+      const k = cityKey(g.x, g.y);
+      if (seen[k]) {
+        reach.goals[g.name] = { x: g.x, y: g.y, ok: true, repaired: false };
+        return;
+      }
+      let best = [40, 51];
+      let bestD = 1e9;
+      Object.keys(seen).forEach(function (sk) {
+        const p = sk.split(",");
+        const d = Math.abs(Number(p[0]) - g.x) + Math.abs(Number(p[1]) - g.y);
+        if (d < bestD) {
+          bestD = d;
+          best = [Number(p[0]), Number(p[1])];
+        }
+      });
+      carveRibbon(best[0], best[1], g.x, g.y);
+      reach.repaired.push(g.name);
+      seen = bfsWalk(40, 51);
+      reach.goals[g.name] = { x: g.x, y: g.y, ok: !!seen[cityKey(g.x, g.y)], repaired: true };
+    });
 
     const walkable = [];
     const cells = {};
@@ -583,26 +995,6 @@
         if (ch && ch !== ".") cells[x + "," + y] = ch;
         if (ch === "T") decor.push({ x: x, y: y, kind: "tree" });
       }
-    }
-
-    // 16. Spawn at (40,51) not (40,54): 23x23 camera is player-centered
-    //     (origin px-11), so y=51 is the southernmost point where the
-    //     fountain at y=40 stays on-screen (cam.y=40). Carve if blocked.
-    const spawn = { x: cx, y: 51 };
-    if (!walkable[spawn.y] || !walkable[spawn.y][spawn.x]) {
-      walkable[spawn.y][spawn.x] = true;
-      if (cells[spawn.x + "," + spawn.y] && "FTH#RrhCDN".indexOf(cells[spawn.x + "," + spawn.y]) >= 0) {
-        delete cells[spawn.x + "," + spawn.y];
-      }
-    }
-    const gateSpawn = { x: 74, y: cy };
-    if (!walkable[gateSpawn.y] || !walkable[gateSpawn.y][gateSpawn.x]) {
-      gateSpawn.x = 75;
-      walkable[gateSpawn.y][gateSpawn.x] = true;
-    }
-    const castleSpawn = { x: cx, y: 18 };
-    if (!walkable[castleSpawn.y] || !walkable[castleSpawn.y][castleSpawn.x]) {
-      walkable[castleSpawn.y][castleSpawn.x] = true;
     }
 
     return {
@@ -618,9 +1010,9 @@
       houseLots: { sw: swLotN, se: seLotN },
       lotPts: { sw: swLotPts, se: seLotPts },
       npcs: { W: wShop, P: pShop, S: kafra, K: { x: cx, y: 16 }, G: { x: n - wallT, y: cy } },
+      reach: reach,
     };
   }
-
 
 
   function cityLandmarks() {
@@ -633,7 +1025,7 @@
     const se = (cityGrid.lotPts && cityGrid.lotPts.se) || [];
     sw.concat(se).forEach(function (pt) {
       add("house", "assets/city/house.png", pt[0] + 1, pt[1] + 2, 3.4, 4.8, 0);
-      add("tree", "assets/city/tree.png", pt[0] + 2.7, pt[1] + 2.15, 1.65, 2.25, 1);
+      add("tree", "assets/city/tree_sm.png", pt[0] + 2.7, pt[1] + 2.15, 2.4, 3.4, 1);
     });
     add("house", "assets/city/house.png", 56, 46, 3.2, 4.4, 0);
     add("castle", "assets/city/castle.png", 40, 16, 13.5, 14.5, 0);
@@ -667,7 +1059,7 @@
     wallLine(1, 5, 1, 74, 2.2);
     wallLine(78.6, 5, 78.6, 74, 2.2);
     (cityGrid.decor || []).forEach(function (d) {
-      if (d.kind === "tree") add("tree", "assets/city/tree.png", d.x, d.y, 1.8, 2.4, 1);
+      if (d.kind === "tree") add("tree", "assets/city/tree.png", d.x, d.y, 3.0, 4.0, 1);
     });
     marks.sort(function (a, b) {
       return a.y - b.y || (a.zoff || 0) - (b.zoff || 0);
@@ -686,6 +1078,27 @@
     const grid = hostEl.querySelector(".map-grid");
     if (!grid) return;
     let layer = grid.querySelector(".city-layer");
+    if (zoneId === "field") {
+      if (!layer) {
+        layer = document.createElement("div");
+        layer.className = "city-layer";
+        grid.appendChild(layer);
+      }
+      const cam = MAP.camera();
+      const vw = MAP.VIEW_W;
+      const vh = MAP.VIEW_H;
+      const gx = (fieldGrid.gate && fieldGrid.gate.x) || 2;
+      const gy = (fieldGrid.gate && fieldGrid.gate.y) || 96;
+      const sx = gx - cam.x;
+      const sy = gy - cam.y;
+      layer.innerHTML =
+        '<div class="city-prop kind-gate" style="left:' +
+        ((sx * 100) / vw).toFixed(3) +
+        "%;top:" +
+        ((sy * 100) / vh).toFixed(3) +
+        '%;--prop-w:5.6;--prop-h:6.4;z-index:24"><img src="assets/city/gatehouse.png" alt=""></div>';
+      return;
+    }
     if (zoneId !== "city") {
       if (layer) layer.parentNode.removeChild(layer);
       return;
@@ -723,6 +1136,76 @@
       );
     });
     CITY_OVER_LABS.forEach(function (lab) {
+      const sx = lab.x - cam.x;
+      const sy = lab.y - cam.y;
+      if (sx < -1 || sy < -1 || sx > vw || sy > vh) return;
+      html.push(
+        '<div class="city-lab" style="left:' +
+          ((sx * 100) / vw).toFixed(3) +
+          "%;top:" +
+          ((sy * 100) / vh).toFixed(3) +
+          "%;z-index:" +
+          (90 + ((lab.y * 2) | 0)) +
+          '">' +
+          lab.text +
+          "</div>"
+      );
+    });
+    layer.innerHTML = html.join("");
+  }
+
+  const FIELD_OVER_MARKS = [
+    { kind: "gate", src: "assets/city/gatehouse.png", x: 2.2, y: 96.4, w: 5.4, h: 6.2, zoff: 3 },
+  ];
+  MAP.FIELD_OVER_MARKS = FIELD_OVER_MARKS;
+  const FIELD_OVER_LABS = [
+    { x: 18, y: 82, text: "ทุ่งใกล้" },
+    { x: 32, y: 70, text: "ป่ากลาง" },
+    { x: 52, y: 48, text: "ป่าลึก" },
+  ];
+
+  function paintFieldOverlay() {
+    if (!hostEl) return;
+    const grid = hostEl.querySelector(".map-grid");
+    if (!grid) return;
+    let layer = grid.querySelector(".field-layer");
+    if (zoneId !== "field") {
+      if (layer) layer.parentNode.removeChild(layer);
+      return;
+    }
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "city-layer field-layer";
+      grid.appendChild(layer);
+    }
+    const cam = MAP.camera();
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
+    const html = [];
+    FIELD_OVER_MARKS.forEach(function (m) {
+      const sx = m.x - cam.x;
+      const sy = m.y - cam.y;
+      if (sx < -m.w - 1 || sy < -m.h - 1 || sx > vw + 2 || sy > vh + 2) return;
+      const z = 20 + ((m.y * 2) | 0) + (m.zoff || 0);
+      html.push(
+        '<div class="city-prop kind-' +
+          m.kind +
+          '" style="left:' +
+          ((sx * 100) / vw).toFixed(3) +
+          "%;top:" +
+          ((sy * 100) / vh).toFixed(3) +
+          "%;--prop-w:" +
+          m.w +
+          ";--prop-h:" +
+          m.h +
+          ";z-index:" +
+          z +
+          '"><img src="' +
+          m.src +
+          '" alt=""></div>'
+      );
+    });
+    FIELD_OVER_LABS.forEach(function (lab) {
       const sx = lab.x - cam.x;
       const sy = lab.y - cam.y;
       if (sx < -1 || sy < -1 || sx > vw || sy > vh) return;
@@ -792,6 +1275,13 @@
   let padTimer = null;
   let padDir = null;
   let padBound = false;
+  let yawDrag = null;
+  let keysHeld = {};
+  let keyUpHandler = null;
+
+  MAP.yaw = 0;
+  MAP.YAW_SENS = 0.32;
+  MAP._groundCache = {};
 
   function zone() {
     return ZONES[zoneId] || ZONES.bosses;
@@ -807,6 +1297,7 @@
 
   MAP.setZone = function (id) {
     if (ZONES[id]) zoneId = id;
+    MAP.resetYaw();
     return zoneId;
   };
 
@@ -857,8 +1348,8 @@
 
   MAP.walkToAdjacent = function (from, target) {
     if (!from || !target) return;
-    if (Math.abs(from.x - target.x) + Math.abs(from.y - target.y) <= 1) return;
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    if (Math.max(Math.abs(from.x - target.x), Math.abs(from.y - target.y)) <= 1) return;
+    const dirs = MAP.DIRS8;
     let best = null;
     let bestLen = 1e9;
     dirs.forEach(function (d) {
@@ -893,13 +1384,23 @@
     return !!(g.walkable[y] && g.walkable[y][x]);
   };
 
+  MAP.DIRS8 = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
+
+  function canStepDiag(x, y, dx, dy) {
+    if (!dx || !dy) return true;
+    return MAP.isWalkable(x + dx, y) && MAP.isWalkable(x, y + dy);
+  }
+
   MAP.neighbors = function (x, y) {
     const out = [];
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    dirs.forEach(function (d) {
+    MAP.DIRS8.forEach(function (d) {
       const nx = x + d[0];
       const ny = y + d[1];
       if (!MAP.isWalkable(nx, ny)) return;
+      if (!canStepDiag(x, y, d[0], d[1])) return;
       if (root.WORLD && WORLD.blocksTile && WORLD.blocksTile(nx, ny)) return;
       out.push({ x: nx, y: ny });
     });
@@ -911,13 +1412,14 @@
     let x = from.x;
     let y = from.y;
     for (let i = 0; i < 48; i++) {
-      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const dirs = MAP.DIRS8;
       let best = null;
       let bestD = Math.abs(x - to.x) + Math.abs(y - to.y);
       dirs.forEach(function (d) {
         const nx = x + d[0];
         const ny = y + d[1];
         if (!MAP.isWalkable(nx, ny)) return;
+        if (!canStepDiag(x, y, d[0], d[1])) return;
         if (root.WORLD && WORLD.blocksTile && WORLD.blocksTile(nx, ny)) return;
         const dist = Math.abs(nx - to.x) + Math.abs(ny - to.y);
         if (dist < bestD) {
@@ -941,7 +1443,7 @@
       return p.x + "," + p.y;
     };
     const heur = function (p) {
-      return Math.abs(p.x - to.x) + Math.abs(p.y - to.y);
+      return Math.max(Math.abs(p.x - to.x), Math.abs(p.y - to.y));
     };
     const open = [{ x: from.x, y: from.y, g: 0, f: heur(from) }];
     const came = {};
@@ -1142,6 +1644,27 @@
 
   function tryStep(dx, dy) {
     const p = pos();
+    if (saveRef && saveRef.autoFarm && root.WORLD && WORLD.playerEntity) {
+      const pe = WORLD.playerEntity();
+      if (pe && pe.sitting) {
+        pe.sitting = false;
+        if (pe.unit) pe.unit.sitting = false;
+      }
+    }
+    if (saveRef && root.PVE && PVE.weightState && PVE.weightState(saveRef).full) {
+      if (!MAP._weightToastAt || Date.now() - MAP._weightToastAt > 1500) {
+        MAP._weightToastAt = Date.now();
+        if (root.UI && UI.toast) UI.toast("น้ำหนักเต็ม เดินไม่ได้");
+      }
+      return false;
+    }
+    if (dx && dy && !canStepDiag(p.x, p.y, dx, dy)) {
+      const openX = MAP.isWalkable(p.x + dx, p.y);
+      const openY = MAP.isWalkable(p.x, p.y + dy);
+      if (openX && !openY) dy = 0;
+      else if (openY && !openX) dx = 0;
+      else return false;
+    }
     const nx = p.x + dx;
     const ny = p.y + dy;
     if (root.WORLD && WORLD.entityAt) {
@@ -1174,6 +1697,13 @@
 
   function walkPath(steps) {
     if (!steps || !steps.length) return;
+    if (saveRef && root.PVE && PVE.weightState && PVE.weightState(saveRef).full) {
+      if (!MAP._weightToastAt || Date.now() - MAP._weightToastAt > 1500) {
+        MAP._weightToastAt = Date.now();
+        if (root.UI && UI.toast) UI.toast("น้ำหนักเต็ม เดินไม่ได้");
+      }
+      return;
+    }
     walking = true;
     function next() {
       if (!walking || !steps.length) {
@@ -1265,29 +1795,210 @@
     pauseUntil = Date.now() + (ms || 600);
   };
 
+  function wrapYaw(deg) {
+    deg = deg % 360;
+    if (deg < 0) deg += 360;
+    return deg;
+  }
+
+  function applyYawCss() {
+    if (!hostEl) return;
+    const grid = hostEl.querySelector(".map-grid");
+    const p = saveRef ? pos() : { x: 0, y: 0 };
+    const cam = MAP.camera();
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
+    const ox = ((p.x - cam.x + 0.5) / vw) * 100;
+    const oy = ((p.y - cam.y + 0.5) / vh) * 100;
+    const yaw = MAP.yaw || 0;
+    hostEl.style.setProperty("--map-yaw", yaw + "deg");
+    if (grid) {
+      grid.style.setProperty("--map-yaw", yaw + "deg");
+      grid.style.setProperty("--yaw-ox", ox + "%");
+      grid.style.setProperty("--yaw-oy", oy + "%");
+      grid.style.transformOrigin = ox + "% " + oy + "%";
+      grid.style.transform = "rotate(" + yaw + "deg)";
+    }
+    let compass = hostEl.querySelector(".map-compass");
+    if (!compass) {
+      compass = document.createElement("div");
+      compass.className = "map-compass";
+      compass.setAttribute("aria-hidden", "true");
+      compass.innerHTML = '<span class="map-compass-n">N</span>';
+      hostEl.appendChild(compass);
+    }
+    compass.style.transform = "rotate(" + -yaw + "deg)";
+  }
+
+  MAP.resetYaw = function () {
+    MAP.yaw = 0;
+    yawDrag = null;
+    applyYawCss();
+  };
+
+  MAP.setYaw = function (deg) {
+    MAP.yaw = wrapYaw(deg);
+    applyYawCss();
+    return MAP.yaw;
+  };
+
+  function screenDirToWorld(dx, dy) {
+    const rad = -(MAP.yaw || 0) * Math.PI / 180;
+    const c = Math.cos(rad);
+    const s = Math.sin(rad);
+    const wx = dx * c - dy * s;
+    const wy = dx * s + dy * c;
+    const ax = Math.abs(wx);
+    const ay = Math.abs(wy);
+    if (ax < 1e-6 && ay < 1e-6) return { x: 0, y: 0 };
+    if (Math.abs(ax - ay) < 0.35) {
+      return { x: wx > 0 ? 1 : -1, y: wy > 0 ? 1 : -1 };
+    }
+    if (ax > ay) return { x: wx > 0 ? 1 : -1, y: 0 };
+    return { x: 0, y: wy > 0 ? 1 : -1 };
+  }
+
+  MAP.screenDirToWorld = screenDirToWorld;
+
+  function screenToTile(clientX, clientY) {
+    if (!hostEl) return null;
+    const box = hostEl.getBoundingClientRect();
+    if (!box.width || !box.height) return null;
+    const p = pos();
+    const cam = MAP.camera();
+    const vw = MAP.VIEW_W;
+    const vh = MAP.VIEW_H;
+    const ox = ((p.x - cam.x + 0.5) / vw) * box.width;
+    const oy = ((p.y - cam.y + 0.5) / vh) * box.height;
+    const lx = clientX - box.left;
+    const ly = clientY - box.top;
+    const rad = -(MAP.yaw || 0) * Math.PI / 180;
+    const c = Math.cos(rad);
+    const s = Math.sin(rad);
+    const dx = lx - ox;
+    const dy = ly - oy;
+    const rx = dx * c - dy * s;
+    const ry = dx * s + dy * c;
+    const sx = Math.floor((ox + rx) / box.width * vw);
+    const sy = Math.floor((oy + ry) / box.height * vh);
+    return { x: cam.x + sx, y: cam.y + sy };
+  }
+
+  MAP.screenToTile = screenToTile;
+
+  function onContextMenu(ev) {
+    ev.preventDefault();
+  }
+
+  function onYawPointerDown(ev) {
+    if (ev.button !== 2) return;
+    ev.preventDefault();
+    yawDrag = {
+      x: ev.clientX,
+      y: ev.clientY,
+      startYaw: MAP.yaw || 0,
+      moved: 0,
+    };
+    if (hostEl && hostEl.setPointerCapture) {
+      try { hostEl.setPointerCapture(ev.pointerId); } catch (e) {}
+    }
+  }
+
+  function onYawPointerMove(ev) {
+    if (!yawDrag) return;
+    const dx = ev.clientX - yawDrag.x;
+    const dy = ev.clientY - yawDrag.y;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    if (dist > yawDrag.moved) yawDrag.moved = dist;
+    if (yawDrag.moved >= 8) {
+      MAP.yaw = wrapYaw(yawDrag.startYaw + dx * MAP.YAW_SENS);
+      applyYawCss();
+    }
+  }
+
+  function onYawPointerUp(ev) {
+    if (!yawDrag) return;
+    if (yawDrag.moved < 8) {
+      MAP.yaw = wrapYaw(yawDrag.startYaw + 45);
+      applyYawCss();
+    }
+    yawDrag = null;
+  }
+
+  function bindYaw() {
+    if (!hostEl) return;
+    hostEl.addEventListener("contextmenu", onContextMenu);
+    hostEl.addEventListener("pointerdown", onYawPointerDown);
+    window.addEventListener("pointermove", onYawPointerMove);
+    window.addEventListener("pointerup", onYawPointerUp);
+    window.addEventListener("pointercancel", onYawPointerUp);
+  }
+
+  function unbindYaw() {
+    if (hostEl) {
+      hostEl.removeEventListener("contextmenu", onContextMenu);
+      hostEl.removeEventListener("pointerdown", onYawPointerDown);
+    }
+    window.removeEventListener("pointermove", onYawPointerMove);
+    window.removeEventListener("pointerup", onYawPointerUp);
+    window.removeEventListener("pointercancel", onYawPointerUp);
+    yawDrag = null;
+  }
+
+  function keyAxis(k) {
+    if (k === "ArrowLeft" || k === "a" || k === "A") return "left";
+    if (k === "ArrowRight" || k === "d" || k === "D") return "right";
+    if (k === "ArrowUp" || k === "w" || k === "W") return "up";
+    if (k === "ArrowDown" || k === "s" || k === "S") return "down";
+    return null;
+  }
+
+  function heldMove() {
+    let dx = 0;
+    let dy = 0;
+    if (keysHeld.left) dx -= 1;
+    if (keysHeld.right) dx += 1;
+    if (keysHeld.up) dy -= 1;
+    if (keysHeld.down) dy += 1;
+    return { dx: dx, dy: dy };
+  }
+
   function onKey(ev) {
     if (!hostEl || !saveRef) return;
     const tag = (ev.target && ev.target.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA") return;
-    const k = ev.key;
-    let dx = 0;
-    let dy = 0;
-    if (k === "ArrowLeft" || k === "a" || k === "A") dx = -1;
-    else if (k === "ArrowRight" || k === "d" || k === "D") dx = 1;
-    else if (k === "ArrowUp" || k === "w" || k === "W") dy = -1;
-    else if (k === "ArrowDown" || k === "s" || k === "S") dy = 1;
-    else return;
+    const axis = keyAxis(ev.key);
+    if (!axis) return;
     ev.preventDefault();
+    keysHeld[axis] = true;
     if (saveRef.autoFarm && zoneId === "field") return;
+    const v = heldMove();
+    if (!v.dx && !v.dy) return;
     stopWalk();
-    tryStep(dx, dy);
+    const world = screenDirToWorld(v.dx, v.dy);
+    tryStep(world.x, world.y);
+  }
+
+  function onKeyUp(ev) {
+    const axis = keyAxis(ev.key);
+    if (!axis) return;
+    keysHeld[axis] = false;
   }
 
   function onClick(ev) {
+    if (ev.button != null && ev.button !== 0) return;
     const tile = ev.target.closest && ev.target.closest("[data-mx]");
-    if (!tile) return;
-    const x = Number(tile.getAttribute("data-mx"));
-    const y = Number(tile.getAttribute("data-my"));
+    let x;
+    let y;
+    if (tile) {
+      x = Number(tile.getAttribute("data-mx"));
+      y = Number(tile.getAttribute("data-my"));
+    } else {
+      const un = screenToTile(ev.clientX, ev.clientY);
+      if (!un) return;
+      x = un.x;
+      y = un.y;
+    }
     const p = pos();
     stopWalk();
     if (root.WORLD && WORLD.entityAt) {
@@ -1306,9 +2017,10 @@
   }
 
   function startPad(dx, dy) {
+    const world = screenDirToWorld(dx, dy);
     stopWalk();
-    padDir = { x: dx, y: dy };
-    tryStep(dx, dy);
+    padDir = { x: world.x, y: world.y };
+    tryStep(world.x, world.y);
     if (padTimer) clearInterval(padTimer);
     padTimer = setInterval(function () {
       if (!padDir || !hostEl) return;
@@ -1349,9 +2061,232 @@
   }
 
   function spriteSrc(heroId) {
-    const unit = { heroId: heroId, facing: (saveRef && saveRef.facing) || MAP.facing || "s", walkFrame: saveRef && saveRef.walkFrame };
+    let sitting = false;
+    if (root.WORLD && WORLD.playerEntity) {
+      const pe = WORLD.playerEntity();
+      sitting = !!(pe && pe.sitting);
+    }
+    const unit = { heroId: heroId, facing: (saveRef && saveRef.facing) || MAP.facing || "s", walkFrame: sitting ? 0 : (saveRef && saveRef.walkFrame), sitting: sitting };
     if (root.FX && FX.spriteSrc) return FX.spriteSrc(heroId, unit);
     return "assets/chars/" + (heroId || "warrior") + "_s.png";
+  }
+
+
+  function groundRole(zid, x, y) {
+    if (zid === "city") {
+      const ch = cityGrid.cells[x + "," + y] || "";
+      if (ch === "~" || ch === "F" || ch === "f" || ch === "L" || ch === "B") return "plaza";
+      const walk = !!(cityGrid.walkable[y] && cityGrid.walkable[y][x]);
+      if (walk && (!ch || ch === "W" || ch === "P" || ch === "S" || ch === "K" || ch === "G")) return "path";
+      return "lawn";
+    }
+    if (zid === "field") {
+      if (fieldGrid.trails && fieldGrid.trails[x + "," + y]) return "path";
+      if (fieldGrid.plain && fieldGrid.plain[x + "," + y]) return "meadow";
+      return "lawn";
+    }
+    return "lawn";
+  }
+
+  function fillTextureWorld(ctx, img, w, h, fallback) {
+    if (img && (img.naturalWidth || img.width)) {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      for (let py = 0; py < h; py += ih) {
+        for (let px = 0; px < w; px += iw) {
+          ctx.drawImage(img, px, py);
+        }
+      }
+      return;
+    }
+    if (fallback) {
+      ctx.fillStyle = fallback;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  function stampSoftRole(ctx, w, h, zid, role, img, fallback, tilePx) {
+    const layer = document.createElement("canvas");
+    layer.width = w;
+    layer.height = h;
+    const lx = layer.getContext("2d");
+    if (!lx) return;
+    fillTextureWorld(lx, img, w, h, fallback);
+    const mask = document.createElement("canvas");
+    mask.width = w;
+    mask.height = h;
+    const mx = mask.getContext("2d");
+    if (!mx) return;
+    const g = ZONES[zid] && ZONES[zid].grid;
+    if (!g) return;
+    for (let y = 0; y < g.rows; y++) {
+      for (let x = 0; x < g.cols; x++) {
+        if (groundRole(zid, x, y) !== role) continue;
+        const cx = (x + 0.5) * tilePx;
+        const cy = (y + 0.5) * tilePx;
+        const rad = (0.82 + (hashXY(x + 3, y + 11) % 14) / 100) * tilePx;
+        const grad = mx.createRadialGradient(cx, cy, rad * 0.42, cx, cy, rad);
+        grad.addColorStop(0, "rgba(0,0,0,1)");
+        grad.addColorStop(0.62, "rgba(0,0,0,0.88)");
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        mx.fillStyle = grad;
+        mx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+      }
+    }
+    lx.globalCompositeOperation = "destination-in";
+    lx.drawImage(mask, 0, 0);
+    ctx.drawImage(layer, 0, 0);
+  }
+
+
+  function stampMeadowBright(ctx, w, h, grassImg, tilePx) {
+    const layer = document.createElement("canvas");
+    layer.width = w;
+    layer.height = h;
+    const lx = layer.getContext("2d");
+    if (!lx) return;
+    fillTextureWorld(lx, grassImg, w, h, "#3d7a38");
+    lx.fillStyle = "rgba(186, 214, 96, 0.34)";
+    lx.fillRect(0, 0, w, h);
+    const mask = document.createElement("canvas");
+    mask.width = w;
+    mask.height = h;
+    const mx = mask.getContext("2d");
+    if (!mx) return;
+    const grid = ZONES.field && ZONES.field.grid;
+    if (!grid) return;
+    for (let y = 0; y < grid.rows; y++) {
+      for (let x = 0; x < grid.cols; x++) {
+        if (groundRole("field", x, y) !== "meadow") continue;
+        const cx = (x + 0.5) * tilePx;
+        const cy = (y + 0.5) * tilePx;
+        const rad = (0.82 + (hashXY(x + 3, y + 11) % 14) / 100) * tilePx;
+        const grad = mx.createRadialGradient(cx, cy, rad * 0.42, cx, cy, rad);
+        grad.addColorStop(0, "rgba(0,0,0,1)");
+        grad.addColorStop(0.62, "rgba(0,0,0,0.88)");
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        mx.fillStyle = grad;
+        mx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+      }
+    }
+    lx.globalCompositeOperation = "destination-in";
+    lx.drawImage(mask, 0, 0);
+    ctx.drawImage(layer, 0, 0);
+  }
+
+  function paintGroundCanvas(zid, imgs) {
+    const z = ZONES[zid];
+    if (!z || typeof document === "undefined") return null;
+    const tilePx = 16;
+    const w = z.grid.cols * tilePx;
+    const h = z.grid.rows * tilePx;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const lawnFallback = zid === "city" ? "#8fd15a" : "#245044";
+    fillTextureWorld(ctx, imgs.lawn, w, h, lawnFallback);
+    if (zid === "city") {
+      stampSoftRole(ctx, w, h, zid, "path", imgs.path, "#c4b49a", tilePx);
+      stampSoftRole(ctx, w, h, zid, "plaza", imgs.plaza, "#f6e6d0", tilePx);
+    } else {
+      if (zid === "field") stampMeadowBright(ctx, w, h, imgs.lawn, tilePx);
+      stampSoftRole(ctx, w, h, zid, "path", imgs.path, "#5a4a32", tilePx);
+    }
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
+
+  function applyGroundCss() {
+    if (!hostEl) return;
+    const grid = hostEl.querySelector(".map-grid");
+    if (!grid) return;
+    const z = zone();
+    const cam = MAP.camera();
+    grid.style.setProperty("--cam-x", String(cam.x));
+    grid.style.setProperty("--cam-y", String(cam.y));
+    grid.style.setProperty("--zone-w", String(z.grid.cols));
+    grid.style.setProperty("--zone-h", String(z.grid.rows));
+    const ground = grid.querySelector(".map-ground");
+    if (!ground) return;
+    const denX = z.grid.cols - MAP.VIEW_W;
+    const denY = z.grid.rows - MAP.VIEW_H;
+    if (denX > 0 && denY > 0) {
+      ground.style.backgroundPosition =
+        (cam.x * 100 / denX).toFixed(4) + "% " + (cam.y * 100 / denY).toFixed(4) + "%";
+    } else {
+      ground.style.backgroundPosition = "0% 0%";
+    }
+    const cached = MAP._groundCache[zoneId];
+    if (cached && cached.url) {
+      ground.style.backgroundImage = 'url("' + cached.url + '")';
+      ground.style.backgroundColor = "transparent";
+    } else if (zoneId === "city") {
+      ground.style.backgroundColor = "#8fd15a";
+      ground.style.backgroundImage = "none";
+    } else if (zoneId === "field") {
+      ground.style.backgroundColor = "#245044";
+      ground.style.backgroundImage = "none";
+    } else {
+      ground.style.backgroundColor = "transparent";
+      ground.style.backgroundImage = "none";
+    }
+  }
+
+  function bakeGround(zid) {
+    if (typeof document === "undefined" || typeof Image === "undefined") return;
+    if (zid !== "city" && zid !== "field") return;
+    if (MAP._groundCache[zid]) return MAP._groundCache[zid];
+    MAP._groundBaking = MAP._groundBaking || {};
+    if (MAP._groundBaking[zid]) return;
+    MAP._groundBaking[zid] = true;
+    const srcs =
+      zid === "city"
+        ? {
+            lawn: "assets/tiles/city_lawn.png",
+            path: "assets/tiles/city_ground.png",
+            plaza: "assets/tiles/city_plaza.png",
+          }
+        : {
+            lawn: "assets/tiles/grass.png",
+            path: "assets/tiles/path.png",
+          };
+    const keys = Object.keys(srcs);
+    const imgs = {};
+    let pending = keys.length;
+    let finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      let url = null;
+      try {
+        url = paintGroundCanvas(zid, imgs);
+      } catch (err) {
+        url = null;
+      }
+      if (url) {
+        MAP._groundCache[zid] = { url: url, cols: ZONES[zid].grid.cols, rows: ZONES[zid].grid.rows };
+        if (hostEl && zoneId === zid) applyGroundCss();
+      }
+      MAP._groundBaking[zid] = false;
+    }
+    function got(k, img) {
+      if (Object.prototype.hasOwnProperty.call(imgs, k)) return;
+      imgs[k] = img || null;
+      pending -= 1;
+      if (!pending) finish();
+    }
+    keys.forEach(function (k) {
+      const img = new Image();
+      img.onload = function () {
+        got(k, img);
+      };
+      img.onerror = function () {
+        got(k, null);
+      };
+      img.src = srcs[k];
+      if (img.complete && img.naturalWidth) got(k, img);
+    });
   }
 
   function paintPlayer() {
@@ -1367,6 +2302,12 @@
       avatar.style.zIndex = String(20 + ((p.y * 2) | 0) + 3);
       const hid = (saveRef && saveRef.heroId) || "warrior";
       const face = (saveRef && saveRef.facing) || MAP.facing || "s";
+      let sitting = false;
+      if (root.WORLD && WORLD.playerEntity) {
+        const pe = WORLD.playerEntity();
+        sitting = !!(pe && pe.sitting);
+      }
+      avatar.classList.toggle("sitting", sitting);
       const img = avatar.querySelector("img.map-sprite");
       const src = spriteSrc(hid);
       if (img && img.getAttribute("src") !== src) img.src = src;
@@ -1377,6 +2318,8 @@
       const y = Number(el.getAttribute("data-my"));
       el.classList.toggle("here", x === p.x && y === p.y);
     });
+    applyYawCss();
+    applyGroundCss();
   }
 
   function tileClass(x, y, walk, inMap) {
@@ -1410,6 +2353,9 @@
     if (zoneId === "field") {
       if (fieldGrid.cells[x + "," + y] === "X") cls += " gate";
       if (walk && fieldGrid.trails && fieldGrid.trails[x + "," + y]) cls += " trail";
+      if (fieldGrid.plain && fieldGrid.plain[x + "," + y]) cls += " plain";
+      const fdist = fieldGrid.spawn ? Math.abs(x - fieldGrid.spawn.x) + Math.abs(y - fieldGrid.spawn.y) : 999;
+      if (fdist >= 52) cls += " mist deep";
       if (walk && flowerAt(x, y)) cls += " flower";
     }
     if (zoneId === "bosses" && MAP.bossAt(x, y)) {
@@ -1444,17 +2390,21 @@
       const ch = fieldGrid.cells[x + "," + y] || "";
       if (ch === "X") {
         if (fieldGrid.gate && x === fieldGrid.gate.x && y === fieldGrid.gate.y) {
-          return '<span class="map-boss-emo">🚪</span><span class="map-boss-lab">กลับหมู่บ้าน</span>';
+          return '<span class="map-boss-lab">กลับหมู่บ้าน</span>';
         }
         return "";
       }
       if (!walk) {
-        const dec = (fieldGrid.decor || []).find(function (d) {
-          return d.x === x && d.y === y;
-        });
+        const gt = fieldGrid.gate;
+        if (ch === "X") return "";
+        if (gt && x <= gt.x + 3 && y >= gt.y - 2 && (x <= gt.x + 1 || y >= gt.y)) return "";
+        const dec = (fieldGrid.decorAt && fieldGrid.decorAt[x + "," + y]) || null;
         if (dec && dec.kind === "rock") return tileArt("assets/tiles/rock.png", "rock");
         if (dec && dec.kind === "fern") return tileArt("assets/tiles/flowers.png", "fern");
-        return tileArt("assets/tiles/tree.png", "tree");
+        if (dec && dec.kind === "tree") {
+          return tileArt(hashXY(x, y) % 3 === 0 ? "assets/city/tree_sm.png" : "assets/city/tree.png", "tree");
+        }
+        return "";
       }
       if (flowerAt(x, y)) return tileArt("assets/tiles/flowers.png", "flower");
       return "";
@@ -1504,7 +2454,9 @@
       return true;
     }
     lastCam = { x: cam.x, y: cam.y };
+    applyGroundCss();
     paintCityOverlay();
+    paintFieldOverlay();
     let i = 0;
     for (let sy = 0; sy < vh; sy++) {
       for (let sx = 0; sx < vw; sx++) {
@@ -1552,7 +2504,18 @@
       vh +
       ";--view:" +
       vw +
+      ";--map-yaw:" +
+      (MAP.yaw || 0) +
+      "deg;--yaw-ox:50%;--yaw-oy:50%;--cam-x:" +
+      cam.x +
+      ";--cam-y:" +
+      cam.y +
+      ";--zone-w:" +
+      z.grid.cols +
+      ";--zone-h:" +
+      z.grid.rows +
       '">' +
+      '<div class="map-ground"></div>' +
       buildTilesHtml() +
       '<div class="map-avatar" style="left:' +
       (sp.x * 100) / vw +
@@ -1562,9 +2525,14 @@
       '<img class="map-sprite hero" src="' +
       spriteSrc(hid) +
       '" alt="">' +
-      "</div></div>";
+      "</div></div>" +
+      '<div class="map-compass" aria-hidden="true"><span class="map-compass-n">N</span></div>';
+    applyGroundCss();
+    bakeGround(zoneId);
     paintPlayer();
     paintCityOverlay();
+    paintFieldOverlay();
+    applyYawCss();
     const av = el.querySelector(".map-avatar");
     if (av && root.FX && FX.applyFacing) FX.applyFacing(av, (saveRef && saveRef.facing) || "s");
   };
@@ -1593,10 +2561,15 @@
       else if (ox === 11 && oy === 6 && z.castleSpawn) save.cityPos = { x: z.castleSpawn.x, y: z.castleSpawn.y };
     }
     if (!save[key]) save[key] = { x: z.spawn.x, y: z.spawn.y };
+    MAP.resetYaw();
     MAP.render(el, save);
+    keysHeld = {};
     keyHandler = onKey;
+    keyUpHandler = onKeyUp;
     document.addEventListener("keydown", keyHandler);
+    document.addEventListener("keyup", keyUpHandler);
     el.addEventListener("click", onClick);
+    bindYaw();
     bindPad();
     if ((zoneId === "field" || zoneId === "bosses") && root.WORLD && WORLD.mount) {
       WORLD.mount(el, save);
@@ -1615,7 +2588,14 @@
       document.removeEventListener("keydown", keyHandler);
       keyHandler = null;
     }
+    if (keyUpHandler) {
+      document.removeEventListener("keyup", keyUpHandler);
+      keyUpHandler = null;
+    }
+    keysHeld = {};
     if (hostEl) hostEl.removeEventListener("click", onClick);
+    unbindYaw();
+    MAP.yaw = 0;
     hostEl = null;
     saveRef = null;
     lastCam = { x: -999, y: -999 };
@@ -1626,6 +2606,8 @@
     if (root.WORLD && WORLD.live && WORLD.live()) return;
     if (save && save.autoFarm && zoneId === "field" && hostEl) startAutoLoop();
   };
+
+  MAP.tryStep = tryStep;
 
   root.MAP = MAP;
 })(typeof globalThis !== "undefined" ? globalThis : window);

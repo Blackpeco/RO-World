@@ -22,6 +22,74 @@
     return { ok: true, name: n };
   };
 
+  PVE.ACCOUNT_STORE_KEY = "ro-world-accounts-v1";
+  PVE.LAST_USER_KEY = "ro-world-last-user";
+  PVE.validateUsername = function (name) {
+    const n = String(name == null ? "" : name).trim();
+    const len = PVE.countNameChars(n);
+    if (!n || len < 1 || len > PVE.CHAR_NAME_MAX) return { ok: false, name: n };
+    if (!/^[\u0E00-\u0E7FA-Za-z0-9_-]+$/.test(n)) return { ok: false, name: n };
+    if (!n.replace(/[_-]/g, "")) return { ok: false, name: n };
+    return { ok: true, name: n };
+  };
+  PVE._readStore = function () {
+    try {
+      if (typeof localStorage === "undefined") return {};
+      const raw = localStorage.getItem(PVE.ACCOUNT_STORE_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (e) { return {}; }
+  };
+  PVE._writeStore = function (obj) {
+    try {
+      if (typeof localStorage === "undefined") return false;
+      localStorage.setItem(PVE.ACCOUNT_STORE_KEY, JSON.stringify(obj));
+      return true;
+    } catch (e) { return false; }
+  };
+  PVE.listAccounts = function () {
+    const store = PVE._readStore();
+    return Object.keys(store).map(function (username) {
+      const s = store[username] || {};
+      const hero = (typeof DATA !== "undefined" && DATA.HEROES && DATA.HEROES[s.heroId]) || {};
+      return {
+        username: username,
+        charName: s.charName || hero.name || username,
+        heroId: s.heroId || "",
+        jobName: hero.name || "",
+        baseLevel: s.baseLevel || s.level || 1,
+        jobLevel: s.jobLevel || 1,
+        zeno: s.zeno || 0,
+        savedAt: s.savedAt || 0,
+      };
+    }).sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
+  };
+  PVE.readAccount = function (username) {
+    const v = PVE.validateUsername(username);
+    if (!v.ok) return null;
+    const s = PVE._readStore()[v.name];
+    if (!s) return null;
+    const clone = JSON.parse(JSON.stringify(s));
+    delete clone.savedAt;
+    clone.username = v.name;
+    return PVE.ensureProgress(clone);
+  };
+  PVE.writeAccount = function (username, save) {
+    const v = PVE.validateUsername(username);
+    if (!v.ok || !save) return { ok: false, error: "username" };
+    const store = PVE._readStore();
+    const clone = JSON.parse(JSON.stringify(save));
+    clone.username = v.name;
+    clone.savedAt = Date.now();
+    store[v.name] = clone;
+    PVE._writeStore(store);
+    try { localStorage.setItem(PVE.LAST_USER_KEY, v.name); } catch (e) {}
+    return { ok: true, name: v.name };
+  };
+  PVE.lastUsername = function () {
+    try { return localStorage.getItem(PVE.LAST_USER_KEY) || ""; } catch (e) { return ""; }
+  };
+
   PVE.createSave = function (heroId, allocated, charName) {
     return {
       heroId: heroId,
@@ -49,10 +117,24 @@
       cityPos: null,
       fieldPos: null,
       autoFarm: false,
+      autoFarmCfg: {
+        sitHpOn: true,
+        sitHp: 30,
+        sitMpOn: true,
+        sitMp: 20,
+        skills: [null, null, null, null],
+        pots: [
+          { id: null, when: "hp", pct: 40 },
+          { id: null, when: "mp", pct: 20 },
+          { id: null, when: "hp", pct: 50 }
+        ]
+      },
+      materials: {},
       currentBossId: null,
       currentMonsterId: null,
       fightKind: null,
       charName: typeof charName === "string" ? charName : "",
+      username: "",
     };
   };
 
@@ -74,10 +156,15 @@
     if (!save.refine) save.refine = {};
     if (!save.mapId) save.mapId = "city";
     if (save.autoFarm == null) save.autoFarm = false;
+    if (!save.materials || typeof save.materials !== "object" || Array.isArray(save.materials)) {
+      save.materials = {};
+    }
+    PVE.ensureAutoFarmCfg(save);
     if (!save.charName) {
       const hero = DATA.HEROES[save.heroId];
       save.charName = (hero && hero.name) || "";
     }
+    if (save.username == null) save.username = "";
     if (save.equip) {
       DATA.SLOTS.forEach(function (slot) {
         const id = save.equip[slot.id];
@@ -92,6 +179,131 @@
     return save;
   };
 
+  function clampFarmPct(n, fallback) {
+    var v = Math.floor(Number(n));
+    if (!isFinite(v)) v = fallback == null ? 40 : fallback;
+    if (v < 1) v = 1;
+    if (v > 99) v = 99;
+    return v;
+  }
+
+  PVE.ensureAutoFarmCfg = function (save) {
+    if (!save) return null;
+    var defPots = [
+      { id: null, when: "hp", pct: 40 },
+      { id: null, when: "mp", pct: 20 },
+      { id: null, when: "hp", pct: 50 }
+    ];
+    var c = save.autoFarmCfg;
+    if (!c || typeof c !== "object") {
+      c = {};
+      save.autoFarmCfg = c;
+    }
+    if (c.sitHpOn == null) c.sitHpOn = true;
+    c.sitHpOn = !!c.sitHpOn;
+    if (c.sitMpOn == null) c.sitMpOn = true;
+    c.sitMpOn = !!c.sitMpOn;
+    c.sitHp = clampFarmPct(c.sitHp, 30);
+    c.sitMp = clampFarmPct(c.sitMp, 20);
+    if (!Array.isArray(c.skills)) c.skills = [null, null, null, null];
+    while (c.skills.length < 4) c.skills.push(null);
+    if (c.skills.length > 4) c.skills = c.skills.slice(0, 4);
+    if (!Array.isArray(c.pots)) c.pots = [];
+    var i;
+    for (i = 0; i < 3; i++) {
+      var src = c.pots[i] && typeof c.pots[i] === "object" ? c.pots[i] : {};
+      var fb = defPots[i];
+      var id = src.id == null || src.id === "" ? null : src.id;
+      if (id && !(DATA.POTIONS && DATA.POTIONS[id])) id = null;
+      c.pots[i] = {
+        id: id,
+        when: src.when === "mp" ? "mp" : src.when === "hp" ? "hp" : fb.when,
+        pct: clampFarmPct(src.pct, fb.pct),
+      };
+    }
+    c.pots.length = 3;
+    return c;
+  };
+
+  PVE.learnedSkillIds = function (save) {
+    var hero = save && save.heroId;
+    var ranks = (save && save.skillRanks) || {};
+    var tree = (DATA.SKILL_TREES && DATA.SKILL_TREES[hero]) || [];
+    var ids = [];
+    tree.forEach(function (n) {
+      if (n && (ranks[n.id] || 0) > 0) ids.push(n.id);
+    });
+    if (!ids.length) {
+      var roots = (DATA.SKILL_ROOTS && DATA.SKILL_ROOTS[hero]) || [];
+      if (roots[0]) ids.push(roots[0]);
+    }
+    return ids;
+  };
+
+  PVE.setFarmSkill = function (save, slotIndex, skillId) {
+    PVE.ensureProgress(save);
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var i = Math.floor(Number(slotIndex));
+    if (i < 0 || i > 3) return { ok: false, reason: "ช่องไม่ถูกต้อง" };
+    if (skillId == null || skillId === "") {
+      cfg.skills[i] = null;
+      return { ok: true };
+    }
+    var learned = PVE.learnedSkillIds(save);
+    if (learned.indexOf(skillId) < 0) return { ok: false, reason: "ยังไม่เรียนสกิลนี้" };
+    cfg.skills[i] = skillId;
+    return { ok: true };
+  };
+
+  PVE.setFarmPot = function (save, slotIndex, spec) {
+    PVE.ensureProgress(save);
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var i = Math.floor(Number(slotIndex));
+    if (i < 0 || i > 2) return { ok: false, reason: "ช่องไม่ถูกต้อง" };
+    spec = spec || {};
+    var cur = cfg.pots[i] || { id: null, when: "hp", pct: 40 };
+    var id = Object.prototype.hasOwnProperty.call(spec, "id") ? spec.id : cur.id;
+    if (id === "" || id == null) id = null;
+    else if (!(DATA.POTIONS && DATA.POTIONS[id])) id = null;
+    var when = spec.when != null ? spec.when : cur.when;
+    when = when === "mp" ? "mp" : "hp";
+    var pct = spec.pct != null ? spec.pct : cur.pct;
+    cfg.pots[i] = { id: id, when: when, pct: clampFarmPct(pct, cur.pct) };
+    return { ok: true };
+  };
+
+  PVE.setFarmSit = function (save, spec) {
+    PVE.ensureProgress(save);
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    spec = spec || {};
+    if (spec.sitHpOn != null) cfg.sitHpOn = !!spec.sitHpOn;
+    if (spec.sitMpOn != null) cfg.sitMpOn = !!spec.sitMpOn;
+    if (spec.sitHp != null) cfg.sitHp = clampFarmPct(spec.sitHp, cfg.sitHp);
+    if (spec.sitMp != null) cfg.sitMp = clampFarmPct(spec.sitMp, cfg.sitMp);
+    return { ok: true };
+  };
+
+  PVE.shouldSit = function (save, unit) {
+    if (!save || !save.autoFarm) return false;
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var hp, maxHp, mp, maxMp;
+    if (unit) {
+      hp = unit.hp;
+      maxHp = unit.maxHp;
+      mp = unit.mp;
+      maxMp = unit.maxMp;
+    } else {
+      var d = PVE.derived(save);
+      hp = save.hp;
+      maxHp = d.maxHp;
+      mp = save.mp;
+      maxMp = d.maxMp;
+    }
+    if (cfg.sitHpOn && maxHp > 0 && hp != null && (hp / maxHp) * 100 < cfg.sitHp) return true;
+    if (cfg.sitMpOn && maxMp > 0 && mp != null && (mp / maxMp) * 100 < cfg.sitMp) return true;
+    return false;
+  };
+
   PVE.resetOnHeroRepick = function () {
     return null;
   };
@@ -100,7 +312,47 @@
     PVE.ensureProgress(save);
     const d = STATS.computeHeroStats(save.heroId, save.allocated, save.equip, save.level, save.refine);
     d.potionAspdMod = DATA.activePotionAspdMod(save.potionBuffs);
+    d.weight = PVE.weightState(save);
     return d;
+  };
+
+  PVE.carryWeight = function (save) {
+    PVE.ensureProgress(save);
+    let w = 0;
+    Object.keys(save.owned || {}).forEach(function (id) {
+      if (save.owned[id]) w += DATA.itemWeight(id);
+    });
+    Object.keys(save.potions || {}).forEach(function (id) {
+      w += (save.potions[id] || 0) * DATA.itemWeight(id);
+    });
+    Object.keys(save.materials || {}).forEach(function (id) {
+      w += (save.materials[id] || 0) * DATA.itemWeight(id);
+    });
+    return w;
+  };
+  PVE.maxWeight = function (save) {
+    PVE.ensureProgress(save);
+    const d = STATS.computeHeroStats(save.heroId, save.allocated, save.equip, save.level, save.refine);
+    return d.maxWeight;
+  };
+  PVE.weightState = function (save) {
+    const cur = PVE.carryWeight(save);
+    const max = PVE.maxWeight(save);
+    const ratio = max > 0 ? cur / max : 0;
+    return {
+      cur: cur,
+      max: max,
+      ratio: ratio,
+      pct: ratio,
+      heavy: ratio >= 0.7,
+      noRegen: ratio >= 0.7,
+      over: ratio >= 0.9,
+      full: ratio >= 1,
+    };
+  };
+  PVE.canCarry = function (save, extra) {
+    extra = Number(extra) || 0;
+    return PVE.carryWeight(save) + extra <= PVE.maxWeight(save);
   };
 
   PVE.syncVitals = function (save) {
@@ -118,6 +370,7 @@
     d.skillRanks = Object.assign({}, ranks);
     d.skills = DATA.learnedSkills(save.heroId, ranks);
     const unit = COMBAT.createUnit(d, "left");
+    unit.noRegen = !!(d.weight && d.weight.noRegen);
     if (d.potionAspdMod > 0) unit.potionAspdMod = d.potionAspdMod;
     if (PVE.potionBuffRemainMs(save, "berserk") > 0) unit.berserk = true;
     unit.hp = save.hp;
@@ -331,11 +584,24 @@
     save.zeno += zeno;
     const exp = PVE.gainExp(save, def.baseExp || 0, def.jobExp || 0);
     const loot = [];
+    if (!save.owned || typeof save.owned !== "object") save.owned = {};
+    if (!save.materials || typeof save.materials !== "object" || Array.isArray(save.materials)) {
+      save.materials = {};
+    }
     (def.drops || []).forEach(function (drop) {
-      if (PVE.rollChance(drop.chance || 0, rng)) {
-        save.potions[drop.id] = (save.potions[drop.id] || 0) + 1;
-        loot.push(drop.id);
+      if (!PVE.rollChance(drop.chance || 0, rng)) return;
+      const id = drop.id;
+      const kind = drop.kind || "potion";
+      const extra = (kind === "item" && save.owned[id]) ? 0 : DATA.itemWeight(id);
+      if (extra > 0 && !PVE.canCarry(save, extra)) return;
+      if (kind === "material") {
+        save.materials[id] = (save.materials[id] || 0) + 1;
+      } else if (kind === "item") {
+        save.owned[id] = true;
+      } else {
+        save.potions[id] = (save.potions[id] || 0) + 1;
       }
+      loot.push(id);
     });
     const d = PVE.derived(save);
     const restore = DATA.FIELD_WIN_RESTORE || 0.08;
@@ -386,6 +652,7 @@
     const item = DATA.POTIONS[potionId];
     if (!item) return { ok: false, reason: "ไม่มียานี้" };
     if (save.zeno < item.price) return { ok: false, reason: "Zeno ไม่พอ" };
+    if (!PVE.canCarry(save, DATA.itemWeight(potionId))) return { ok: false, reason: "น้ำหนักเต็ม แบกไม่ไหว" };
     save.zeno -= item.price;
     save.potions = save.potions || DATA.emptyPotions();
     save.potions[potionId] = (save.potions[potionId] || 0) + 1;
@@ -456,11 +723,36 @@
 
   PVE.maybeAutoPotion = function (save, unit) {
     PVE.ensureProgress(save);
-    const hp = unit ? unit.hp : save.hp;
-    const maxHp = unit ? unit.maxHp : PVE.derived(save).maxHp;
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var der = PVE.derived(save);
+    var hp = unit ? unit.hp : save.hp;
+    var mp = unit ? unit.mp : save.mp;
+    var maxHp = unit ? unit.maxHp : der.maxHp;
+    var maxMp = unit ? unit.maxMp : der.maxMp;
+    var pots = cfg.pots || [];
+    var any = false;
+    var i;
+    for (i = 0; i < pots.length; i++) {
+      if (pots[i] && pots[i].id) { any = true; break; }
+    }
+    if (any) {
+      for (i = 0; i < pots.length; i++) {
+        var p = pots[i];
+        if (!p || !p.id) continue;
+        if (PVE.potionCount(save, p.id) < 1) continue;
+        var need = (p.pct == null ? 40 : p.pct) / 100;
+        if (p.when === "hp" && maxHp && hp / maxHp < need) {
+          return PVE.usePotion(save, p.id, unit);
+        }
+        if (p.when === "mp" && maxMp && mp / maxMp < need) {
+          return PVE.usePotion(save, p.id, unit);
+        }
+      }
+      return null;
+    }
     if (!maxHp || hp / maxHp >= (DATA.AUTO_POTION_HP || 0.4)) return null;
-    const order = ["orange", "red", "white"];
-    for (let i = 0; i < order.length; i++) {
+    var order = ["orange", "red", "white"];
+    for (i = 0; i < order.length; i++) {
       if (PVE.potionCount(save, order[i]) > 0) {
         return PVE.usePotion(save, order[i], unit);
       }
@@ -484,6 +776,7 @@
     if (!item) return { ok: false, reason: "ไม่มีไอเทมนี้" };
     if (save.owned[itemId]) return { ok: false, reason: "เป็นเจ้าของแล้ว" };
     if (save.zeno < item.price) return { ok: false, reason: "Zeno ไม่พอ" };
+    if (!PVE.canCarry(save, DATA.itemWeight(itemId))) return { ok: false, reason: "น้ำหนักเต็ม แบกไม่ไหว" };
     save.zeno -= item.price;
     save.owned[itemId] = true;
     return { ok: true };
@@ -578,7 +871,7 @@
   };
 
   /**
-   * Attempt +1 refine. Safe fail: keep current plus, spend Zeno, no break.
+   * Attempt +1 refine. Safe fail: keep current plus, spend Zeno + matching ore, no break.
    */
   PVE.attemptRefine = function (save, itemId, rng) {
     PVE.ensureProgress(save);
@@ -591,7 +884,11 @@
     const cost = DATA.refineCostTo(next);
     const chance = DATA.refineChanceTo(next);
     if (save.zeno < cost) return { ok: false, reason: "Zeno ไม่พอ (ต้อง " + cost + ")" };
+    const oreId = DATA.refineOreFor(item, next);
+    const haveOre = oreId ? (save.materials[oreId] || 0) : 0;
+    if (!oreId || haveOre < 1) return { ok: false, reason: "แร่ไม่พอ" };
     save.zeno -= cost;
+    save.materials[oreId] = haveOre - 1;
     let success;
     if (rng && typeof rng.chance === "function") success = rng.chance(chance);
     else if (rng && typeof rng.next === "function") success = rng.next() * 100 < chance;

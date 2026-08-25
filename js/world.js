@@ -25,6 +25,10 @@
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
   }
 
+  function chebyshev(a, b) {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  }
+
   function toast(msg, ms) {
     if (root.UI && UI.toast) UI.toast(msg, ms);
   }
@@ -122,7 +126,7 @@
     if (!ent || !foe || foe.dead) return false;
     const def = skillDef(ent, skillId);
     if (def && def.type === "self") return true;
-    return manh(ent, foe) <= skillRange(ent, skillId);
+    return chebyshev(ent, foe) <= skillRange(ent, skillId);
   }
 
   function makePair(atk, defn) {
@@ -142,6 +146,9 @@
       turnCount: 0,
       waitingAction: null,
       mode: "rt",
+      foes: (S.entities || []).filter(function (e) {
+        return e && !e.dead && e.kind !== "player" && e.aggro && e.unit && e.unit.hp > 0;
+      }),
       _restore: function () {
         atk.unit.side = keepA;
         defn.unit.side = keepD;
@@ -238,7 +245,7 @@
   function announceFieldReward(reward) {
     if (!reward) return;
     const loot = (reward.loot || []).map(function (id) {
-      return DATA.POTIONS[id] ? DATA.POTIONS[id].name : id;
+      return DATA.lootName ? DATA.lootName(id) : id;
     }).join(", ");
     let msg = "+" + reward.baseExp + " Base EXP · +" + reward.jobExp + " Job EXP · +" + reward.zeno + " Zeno";
     if (loot) msg += " · ได้ " + loot;
@@ -279,8 +286,23 @@
     if (root.App && App.goCity) App.goCity();
   }
 
+
+  function playerWeightOver() {
+    return !!(S && S.save && root.PVE && PVE.weightState && PVE.weightState(S.save).over);
+  }
+  function toastWeightOverAtk() {
+    if (!WORLD._weightAtkToastAt || Date.now() - WORLD._weightAtkToastAt > 2000) {
+      WORLD._weightAtkToastAt = Date.now();
+      toast("น้ำหนักเกิน 90% โจมตี/ใช้สกิลไม่ได้");
+    }
+  }
+
   function executeOn(atk, defn, skillId) {
     if (!atk || !defn || atk.dead || S.ending) return false;
+    if (atk.kind === "player" && playerWeightOver()) {
+      toastWeightOverAtk();
+      return false;
+    }
     const def = skillDef(atk, skillId);
     if (!def) return false;
     if (!COMBAT.skillReady(atk.unit, skillId, def)) return false;
@@ -322,6 +344,11 @@
     if (!S || !skillId) return false;
     const ent = side === "right" && S.foe ? S.foe : S.player;
     if (!ent || ent.dead) return false;
+    if (ent.kind === "player" && ent.sitting) setPlayerSitting(false);
+    if (ent.kind === "player" && playerWeightOver()) {
+      toastWeightOverAtk();
+      return false;
+    }
     const def = skillDef(ent, skillId);
     if (!def) return false;
     if (!COMBAT.skillReady(ent.unit, skillId, def)) {
@@ -376,7 +403,7 @@
     const p = playerPos();
     const sid = basicSkillOf(S.player);
     if (sid && inSkillRange(S.player, ent, sid)) return;
-    if (manh(p, ent) <= 1) return;
+    if (chebyshev(p, ent) <= 1) return;
     if (MAP && MAP.walkToAdjacent) MAP.walkToAdjacent(p, ent);
   };
 
@@ -394,6 +421,11 @@
 
   function trySwing(ent) {
     if (!ent || ent.dead || S.ending) return;
+    if (ent.kind === "player" && ent.sitting) return;
+    if (ent.kind === "player" && playerWeightOver()) {
+      toastWeightOverAtk();
+      return;
+    }
     if (nowMs() < (ent.atkReadyAt || 0)) return;
     let foe = null;
     if (ent.kind === "player") {
@@ -408,7 +440,7 @@
     const sid = basicSkillOf(ent);
     if (!sid) return;
     if (!inSkillRange(ent, foe, sid)) return;
-    if (ent.kind !== "player" && !ent.aggro && manh(ent, foe) > 1) return;
+    if (ent.kind !== "player" && !ent.aggro && chebyshev(ent, foe) > 1) return;
     executeOn(ent, foe, sid);
   }
 
@@ -437,6 +469,10 @@
       [-1, 0],
       [0, 1],
       [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
     ];
     let best = null;
     let bestD = manh(ent, { x: tx, y: ty });
@@ -444,6 +480,7 @@
       const nx = ent.x + d[0];
       const ny = ent.y + d[1];
       if (!isWalkable(nx, ny)) return;
+      if (d[0] && d[1] && (!isWalkable(ent.x + d[0], ent.y) || !isWalkable(ent.x, ent.y + d[1]))) return;
       if (WORLD.blocksTile(nx, ny, ent.id)) return;
       if (S.player && nx === S.player.x && ny === S.player.y && ent !== S.player) return;
       const dist = Math.abs(nx - tx) + Math.abs(ny - ty);
@@ -472,17 +509,17 @@
     if (!p || p.dead) return;
     if (S.mode === "arena") {
       ent.aggro = true;
-      if (manh(ent, p) > 1) stepToward(ent, p.x, p.y);
+      if (chebyshev(ent, p) > 1) stepToward(ent, p.x, p.y);
       return;
     }
-    if (manh(ent, p) <= 1) ent.aggro = true;
+    if (chebyshev(ent, p) <= 1) ent.aggro = true;
     if (!ent.aggro) return;
     if (manh(ent, p) > WORLD.AGGRO_LEASH) {
       ent.aggro = false;
       if (ent.x !== ent.spawnX || ent.y !== ent.spawnY) stepToward(ent, ent.spawnX, ent.spawnY);
       return;
     }
-    if (manh(ent, p) > 1) stepToward(ent, p.x, p.y);
+    if (chebyshev(ent, p) > 1) stepToward(ent, p.x, p.y);
   }
 
   function tickRespawn(ent) {
@@ -508,8 +545,71 @@
     ent.unit.mp = ent.unit.maxMp;
   }
 
-  function tickAutoFarm() {
-    if (!S || S.mode !== "field" || !S.save || !S.save.autoFarm) return;
+  /* Sit regen = 2× stand (hpRegen/mpRegen per second while sitting). */
+  WORLD.SIT_REGEN_MULT = 2;
+
+  function setPlayerSitting(on) {
+    if (!S || !S.player) return;
+    S.player.sitting = !!on;
+    if (S.player.unit) S.player.unit.sitting = !!on;
+    if (on && MAP && MAP.stopWalking) MAP.stopWalking();
+    if (S.hostEl) {
+      const av = S.hostEl.querySelector(".map-avatar");
+      if (av) av.classList.toggle("sitting", !!on);
+    }
+  }
+
+  WORLD.applySitRegen = function (unit, dt) {
+    if (!unit) return 0;
+    if (S && S.save && root.PVE && PVE.weightState && PVE.weightState(S.save).noRegen) return 0;
+    if (unit.noRegen) return 0;
+    dt = Number(dt) || 0;
+    if (dt <= 0) return 0;
+    const mult = WORLD.SIT_REGEN_MULT || 2;
+    unit._sitRegenAcc = (unit._sitRegenAcc || 0) + dt;
+    let n = 0;
+    while (unit._sitRegenAcc >= 1000) {
+      unit._sitRegenAcc -= 1000;
+      COMBAT.healUnit(unit, (unit.hpRegen || 0) * mult);
+      COMBAT.restoreMp(unit, (unit.mpRegen || 0) * mult);
+      n += 1;
+    }
+    return n;
+  };
+
+  WORLD.pickFarmSkill = function (save, playerEnt, foeEnt) {
+    if (!save || !playerEnt) return null;
+    const unit = playerEnt.unit || playerEnt;
+    const cfg = PVE.ensureAutoFarmCfg(save);
+    const learned = PVE.learnedSkillIds(save);
+    const list = cfg.skills || [];
+    let i;
+    for (i = 0; i < list.length; i++) {
+      const id = list[i];
+      if (!id) continue;
+      if (learned.indexOf(id) < 0) continue;
+      const def = DATA.SKILLS[id];
+      if (!def) continue;
+      if (!COMBAT.skillReady(unit, id, def)) continue;
+      if (def.type === "self") return id;
+      const ent = playerEnt.unit ? playerEnt : { x: playerEnt.x || 0, y: playerEnt.y || 0, unit: unit };
+      if (foeEnt && inSkillRange(ent, foeEnt, id)) return id;
+    }
+    return null;
+  };
+
+  WORLD.tryFarmSkills = function (save, playerEnt, foeEnt) {
+    const id = WORLD.pickFarmSkill(save, playerEnt, foeEnt);
+    if (!id) return false;
+    return WORLD.cast(id, "left");
+  };
+
+  function tickAutoFarm(dt) {
+    if (!S || S.mode !== "field" || !S.player) return;
+    if (!S.save || !S.save.autoFarm) {
+      if (S.player.sitting) setPlayerSitting(false);
+      return;
+    }
     const p = S.player;
     if (!p || p.dead) return;
     PVE.maybeAutoPotion(S.save, p.unit);
@@ -517,10 +617,18 @@
     const hpPct = p.unit.maxHp ? p.unit.hp / p.unit.maxHp : 1;
     if (hpPct < (DATA.AUTO_FARM_STOP_HP || 0.15) && !PVE.hasHpPotion(S.save)) {
       S.save.autoFarm = false;
+      setPlayerSitting(false);
       toast("HP ต่ำและยาหมด — หยุด Auto Farm");
       paintHud(true);
       return;
     }
+    if (PVE.shouldSit(S.save, p.unit)) {
+      setPlayerSitting(true);
+      WORLD.applySitRegen(p.unit, dt);
+      syncPlayerSave();
+      return;
+    }
+    if (p.sitting) setPlayerSitting(false);
     let tgt = WORLD.targetEntity();
     if (!tgt || tgt.dead) {
       tgt = nearestLiving(p, "mob");
@@ -535,21 +643,22 @@
       if (MAP && MAP.walkToAdjacent) MAP.walkToAdjacent(playerPos(), tgt);
       return;
     }
+    if (WORLD.tryFarmSkills(S.save, p, tgt)) return;
     if (hpPct < (DATA.AUTO_HEAL_SKILL_HP || 0.35)) {
-      const heal = (p.unit.skills || []).find(function (sid) {
-        const def = DATA.SKILLS[sid];
-        return def && (sid === "heal" || sid === "sanctuary") && COMBAT.skillReady(p.unit, sid, def);
+      const heal = (p.unit.skills || []).find(function (hid) {
+        const def = DATA.SKILLS[hid];
+        return def && (hid === "heal" || hid === "sanctuary") && COMBAT.skillReady(p.unit, hid, def);
       });
       if (heal) {
         WORLD.cast(heal, "left");
         return;
       }
     }
-    const dmg = (p.unit.skills || []).find(function (sid) {
-      const def = DATA.SKILLS[sid];
+    const dmg = (p.unit.skills || []).find(function (hid) {
+      const def = DATA.SKILLS[hid];
       if (!def || def.type !== "attack") return false;
       if ((def.cd || 0) === 0 && (def.mp || 0) === 0) return false;
-      return COMBAT.skillReady(p.unit, sid, def);
+      return COMBAT.skillReady(p.unit, hid, def);
     });
     if (dmg) WORLD.cast(dmg, "left");
   }
@@ -613,7 +722,7 @@
     if (S.mode === "arena" && S.localBoth) {
       trySwing(S.foe);
     }
-    tickAutoFarm();
+    tickAutoFarm(dt);
     tickArenaAi();
     syncPlayerSave();
     S.hudAcc = (S.hudAcc || 0) + dt;
@@ -1046,7 +1155,7 @@
     if (!S) return;
     S.entities.forEach(function (e) {
       if (e.dead || e.kind === "player") return;
-      if (Math.abs(e.x - x) + Math.abs(e.y - y) <= 1) {
+      if (Math.max(Math.abs(e.x - x), Math.abs(e.y - y)) <= 1) {
         e.aggro = true;
         if (!S.targetId) S.targetId = e.id;
       }
@@ -1057,6 +1166,13 @@
     if (!S || S.mode !== "arena") return false;
     const ent = side === "right" ? S.foe : S.player;
     if (!ent || ent.dead) return false;
+    if (dx && dy && (!isWalkable(ent.x + dx, ent.y) || !isWalkable(ent.x, ent.y + dy))) {
+      const openX = isWalkable(ent.x + dx, ent.y);
+      const openY = isWalkable(ent.x, ent.y + dy);
+      if (openX && !openY) dy = 0;
+      else if (openY && !openX) dx = 0;
+      else return false;
+    }
     const nx = ent.x + dx;
     const ny = ent.y + dy;
     if (!isWalkable(nx, ny)) return false;

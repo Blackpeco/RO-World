@@ -155,6 +155,9 @@
     const hid = id || (unit && unit.heroId) || "warrior";
     const facing = (unit && (unit.facing || unit.dir)) || (typeof MAP !== "undefined" && MAP.facing) || "s";
     const art = FX.facingArt(facing);
+    if (unit && unit.sitting) {
+      return "assets/chars/" + hid + "_" + art.base + ".png";
+    }
     let dirPath = "assets/chars/" + hid + "_" + art.base + ".png";
     const wf = unit && (unit.walkFrame || unit.step);
     if (wf && (art.base === "s" || art.base === "se")) {
