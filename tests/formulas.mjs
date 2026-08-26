@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import vm from "vm";
@@ -575,7 +575,9 @@ console.log("berserk potion + potion ASPD buffs");
 
 console.log("field monsters + field rewards");
 {
-  assert(DATA.MONSTERS.length >= 3, "at least 3 field monsters");
+  const fieldIds = ["poring", "fabre", "lunatic", "willow", "condor", "wolf", "poporing", "chonchon", "roda_frog", "spore", "rocker", "steel_chonchon", "savage_babe", "elder_willow", "skeleton"];
+  assert(DATA.MONSTERS.length === 15, "exactly 15 field monsters, got " + DATA.MONSTERS.length);
+  assert(DATA.MONSTERS.map(function (m) { return m.id; }).join(",") === fieldIds.join(","), "15 field ids in roster order");
   const poring = DATA.findMonster("poring");
   assert(poring && poring.hp === 800 && poring.baseExp === 45 && poring.jobExp === 30, "poring stats");
   const fabre = DATA.findMonster("fabre");
@@ -1099,6 +1101,10 @@ console.log("8-dir mob facing");
   ids.forEach(function (id) {
     const src = FX.spriteSrc(id, { isMonster: true, facing: "s" });
     assert(src === "assets/mobs/" + id + "_s.png", id + " s prefers dir path, got " + src);
+    ["s", "n", "e", "se", "ne"].forEach(function (d) {
+      assert(existsSync(join(root, "assets/mobs/" + id + "_" + d + ".png")), id + " " + d + " png exists");
+    });
+    assert(existsSync(join(root, "assets/mobs/" + id + ".png")), id + " fallback png exists");
   });
 
   FX.noteMob404("assets/mobs/poring_e.png");
@@ -2097,6 +2103,161 @@ console.log("arrow catalog v1");
   const lvGate = PVE.createSave("hunter", DATA.emptyAllocated());
   const denyLv = PVE.buyAmmo(lvGate, "arrow_steel", 1);
   assert(!denyLv.ok, "lv1 cannot buy steel req 12");
+}
+
+console.log("field mob respawn 20-30s");
+{
+  assert(DATA.FIELD_RESPAWN_MS_MIN === 20000, "FIELD_RESPAWN_MS_MIN 20000, got " + DATA.FIELD_RESPAWN_MS_MIN);
+  assert(DATA.FIELD_RESPAWN_MS_MAX === 30000, "FIELD_RESPAWN_MS_MAX 30000, got " + DATA.FIELD_RESPAWN_MS_MAX);
+  assert(DATA.BOSS_RESPAWN_MS === 8000, "BOSS_RESPAWN_MS still 8000, got " + DATA.BOSS_RESPAWN_MS);
+  assert(typeof DATA.fieldRespawnMs === "function", "fieldRespawnMs helper exists");
+
+  const rng = COMBAT.createRng(1);
+  let allIntInRange = true;
+  const seen = {};
+  for (let i = 0; i < 200; i++) {
+    const v = DATA.fieldRespawnMs(rng);
+    if (typeof v !== "number" || v !== (v | 0) || v < 20000 || v > 30000) allIntInRange = false;
+    seen[v] = (seen[v] || 0) + 1;
+  }
+  assert(allIntInRange, "200 seeded rolls are integers in [20000, 30000]");
+  assert(Object.keys(seen).length > 1, "seeded rolls show variance, unique=" + Object.keys(seen).length);
+
+  const lo = DATA.fieldRespawnMs({ next: function () { return 0; } });
+  const hi = DATA.fieldRespawnMs({ next: function () { return 0.999999; } });
+  assert(lo === 20000, "rng.next 0 → 20000, got " + lo);
+  assert(hi === 30000, "rng.next 0.999999 → 30000, got " + hi);
+
+  const seq = COMBAT.createRng(1);
+  const a = DATA.fieldRespawnMs(seq);
+  const b = DATA.fieldRespawnMs(seq);
+  assert(a !== b, "two sequential seeded rolls differ, got " + a + " and " + b);
+
+  MAP.resetField();
+  MAP.setZone("field");
+  const mobs = MAP.listFieldSpawns();
+  assert(mobs.length > 0, "field has mobs after reset/list, got " + mobs.length);
+  const m = mobs[0];
+  const t0 = Date.now();
+  MAP.markMobDead(m.x, m.y);
+  const t1 = Date.now();
+  const after = MAP.listFieldSpawns().find(function (s) { return s.uid === m.uid || (s.x === m.x && s.y === m.y); });
+  assert(after && after.deadUntil, "markMobDead set deadUntil, got " + (after && after.deadUntil));
+  const du = after.deadUntil;
+  assert(du >= t0 + 20000 && du <= t1 + 30000, "deadUntil in [now+20000, now+30000], delta=" + (du - t0) + " window=[" + (t0 + 20000) + "," + (t1 + 30000) + "]");
+  assert(MAP.monsterAt(m.x, m.y) === null, "marked mob is not living at tile");
+
+  const worldSrc = readFileSync(join(root, "js", "world.js"), "utf8");
+  const mapSrc = readFileSync(join(root, "js", "map.js"), "utf8");
+  assert(worldSrc.indexOf("DATA.fieldRespawnMs(S.rng)") >= 0, "world.js onDeath calls fieldRespawnMs(S.rng)");
+  assert(mapSrc.indexOf("DATA.fieldRespawnMs()") >= 0, "map.js markMobDead calls fieldRespawnMs()");
+  assert(!/FIELD_RESPAWN_MS\s*===\s*4000/.test(worldSrc) && !/FIELD_RESPAWN_MS\s*\|\|\s*4000/.test(worldSrc), "world.js has no FIELD_RESPAWN_MS === 4000 / || 4000");
+  assert(!/FIELD_RESPAWN_MS\s*===\s*4000/.test(mapSrc) && !/FIELD_RESPAWN_MS\s*\|\|\s*4000/.test(mapSrc), "map.js has no FIELD_RESPAWN_MS === 4000 / || 4000");
+  MAP.setZone("bosses");
+}
+
+console.log("auto farm mob picker");
+{
+  const save = PVE.createSave("warrior", DATA.emptyAllocated());
+  assert(Array.isArray(save.autoFarmCfg.mobIds) && save.autoFarmCfg.mobIds.length === 0, "createSave mobIds []");
+  assert(save.autoFarmCfg.mobNone === false, "createSave mobNone false");
+  assert(PVE.farmAllowsMob(save, "poring") === true, "farmAllowsMob true when mobIds empty");
+  assert(PVE.farmAllowsMob(save, "fabre") === true, "farmAllowsMob true for any when empty");
+
+  PVE.toggleFarmMob(save, "poring");
+  assert(save.autoFarmCfg.mobIds.length === 1 && save.autoFarmCfg.mobIds[0] === "poring", "toggleFarmMob stores [poring]");
+  assert(save.autoFarmCfg.mobNone === false, "toggleFarmMob clears mobNone");
+  assert(PVE.farmAllowsMob(save, "poring") === true, "after toggleFarmMob(poring) only poring allowed");
+  assert(PVE.farmAllowsMob(save, "fabre") === false, "after toggleFarmMob(poring) fabre denied");
+
+  PVE.setFarmMobsAll(save);
+  assert(save.autoFarmCfg.mobIds.length === 0 && save.autoFarmCfg.mobNone === false, "setFarmMobsAll restores allow-all");
+  assert(PVE.farmAllowsMob(save, "fabre") === true, "setFarmMobsAll allows all");
+
+  PVE.setFarmMobsNone(save);
+  assert(save.autoFarmCfg.mobNone === true && save.autoFarmCfg.mobIds.length === 0, "setFarmMobsNone sets mobNone");
+  assert(PVE.farmAllowsMob(save, "poring") === false, "setFarmMobsNone allows none");
+  assert(PVE.farmAllowsMob(save, "skeleton") === false, "setFarmMobsNone denies every id");
+
+  PVE.toggleFarmMob(save, "lunatic");
+  assert(save.autoFarmCfg.mobNone === false && save.autoFarmCfg.mobIds[0] === "lunatic", "toggle after none adds lunatic");
+
+  const ids = PVE.fieldMonsterIds();
+  const need = ["poring", "fabre", "lunatic", "willow", "condor", "wolf", "poporing", "chonchon", "roda_frog", "spore", "rocker", "steel_chonchon", "savage_babe", "elder_willow", "skeleton"];
+  assert(need.every(function (id) { return ids.indexOf(id) >= 0; }), "fieldMonsterIds includes Prontera field bands");
+  assert(ids.length === new Set(ids).size, "fieldMonsterIds unique");
+
+  const cat = PVE.farmMobCatalog(save);
+  assert(Array.isArray(cat) && cat.length >= need.length, "farmMobCatalog returns field list");
+  const poring = cat.find(function (m) { return m.id === "poring"; });
+  assert(!!poring && !!poring.portrait && !!poring.name, "farmMobCatalog poring has portrait+name");
+  assert(poring.name === "โปริ่ง", "farmMobCatalog poring Thai name");
+
+  const dirty = PVE.createSave("warrior", DATA.emptyAllocated());
+  dirty.autoFarmCfg.mobIds = ["poring", "poring", "not_a_mob", "fabre", "__none__"];
+  const cleaned = PVE.ensureAutoFarmCfg(dirty);
+  assert(cleaned.mobIds.join(",") === "poring,fabre", "ensureAutoFarmCfg unique + strip unknown");
+  assert(cleaned.mobNone === false, "real ids clear __none__ sentinel / mobNone");
+
+  const bossSave = PVE.createSave("warrior", DATA.emptyAllocated());
+  bossSave.mapId = "bosses";
+  const bosses = PVE.farmMobCatalog(bossSave);
+  assert(bosses.length === DATA.BOSSES.length && bosses[0].id === DATA.BOSSES[0].id, "farmMobCatalog bosses map uses DATA.BOSSES");
+
+  const all = PVE.createSave("warrior", DATA.emptyAllocated());
+  PVE.fieldMonsterIds().forEach(function (id) { PVE.toggleFarmMob(all, id); });
+  assert(all.autoFarmCfg.mobIds.length === 0 && all.autoFarmCfg.mobNone === false, "selecting full catalog stores [] (all)");
+  assert(PVE.farmAllowsMob(all, "poring") === true, "full catalog selection allows all");
+}
+
+console.log("pickFarmTarget honors farmAllowsMob");
+{
+  const WORLD = ctx.WORLD;
+  MAP.setZone("field");
+  const g = MAP.ZONES.field.grid;
+  const saved = [];
+  function setWalk(x, y, on) {
+    saved.push({ x: x, y: y, walk: !!(g.walkable[y] && g.walkable[y][x]) });
+    if (!g.walkable[y]) g.walkable[y] = [];
+    g.walkable[y][x] = on;
+  }
+  try {
+    for (let y = 88; y <= 92; y++) {
+      for (let x = 8; x <= 14; x++) setWalk(x, y, true);
+    }
+    const player = { x: 10, y: 90, kind: "player" };
+    const poring = { id: "m-poring", kind: "mob", monsterId: "poring", x: 13, y: 90, dead: false };
+    const fabre = { id: "m-fabre", kind: "mob", monsterId: "fabre", x: 11, y: 90, dead: false };
+    const save = PVE.createSave("warrior", DATA.emptyAllocated());
+    assert(WORLD.pickFarmTarget(player, [poring, fabre], save) === fabre, "empty mobIds picks nearest (fabre)");
+    PVE.toggleFarmMob(save, "poring");
+    assert(WORLD.pickFarmTarget(player, [poring, fabre], save) === poring, "poring-only skips closer fabre");
+    PVE.setFarmMobsNone(save);
+    assert(WORLD.pickFarmTarget(player, [poring, fabre], save) === null, "mobNone picks nobody");
+    PVE.setFarmMobsAll(save);
+    assert(WORLD.pickFarmTarget(player, [poring, fabre], save) === fabre, "all types picks nearest fabre again");
+  } finally {
+    saved.reverse().forEach(function (c) {
+      if (!g.walkable[c.y]) g.walkable[c.y] = [];
+      g.walkable[c.y][c.x] = c.walk;
+    });
+  }
+}
+
+console.log("auto farm yields to manual input");
+{
+  const WORLD = ctx.WORLD;
+  assert(typeof MAP.markManual === "function" && typeof MAP.isManual === "function", "MAP.markManual / isManual exported");
+  assert(typeof WORLD.noteManual === "function" && typeof WORLD.isManual === "function", "WORLD.noteManual / isManual exported");
+  MAP.markManual(2000);
+  assert(MAP.isManual() === true, "markManual(2000) is manual immediately");
+  MAP.markManual(0);
+  assert(MAP.isManual() === false, "markManual(0) is not manual");
+  MAP.markManual(-5);
+  assert(MAP.isManual() === false, "expired manual window is not manual");
+  MAP.markManual(1800);
+  assert(MAP.isManual() === true, "default-length 1800 window is manual");
+  MAP.markManual(0);
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

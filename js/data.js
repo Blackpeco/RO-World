@@ -38,7 +38,19 @@
   DATA.JOB_LEVEL_CAP = 50;
   DATA.STAT_POINTS_PER_BASE_LEVEL = 10;
   DATA.KAFRA_HEAL_COST = 50;
-  DATA.FIELD_RESPAWN_MS = 4000;
+  DATA.FIELD_RESPAWN_MS_MIN = 20000;
+  DATA.FIELD_RESPAWN_MS_MAX = 30000;
+  DATA.fieldRespawnMs = function (rng) {
+    const min = DATA.FIELD_RESPAWN_MS_MIN;
+    const max = DATA.FIELD_RESPAWN_MS_MAX;
+    if (root.PVE && typeof root.PVE.rollInt === "function") {
+      return root.PVE.rollInt(min, max, rng);
+    }
+    if (rng && typeof rng.next === "function") {
+      return min + Math.floor(rng.next() * (max - min + 1));
+    }
+    return min + Math.floor(Math.random() * (max - min + 1));
+  };
   DATA.BOSS_RESPAWN_MS = 8000;
   DATA.WORLD_TICK_MS = 50;
   DATA.CD_TURN_MS = 1600;

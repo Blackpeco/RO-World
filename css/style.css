@@ -2451,6 +2451,7 @@ body.walking #screen {
 
 /* ---- Auto Farm + Inventory overlays ---- */
 .city-win.city-win-farm { width: min(520px, 92vw); max-height: 74vh; }
+.city-win.city-win-farm-mobs { width: min(560px, 94vw); max-height: 74vh; }
 .city-win.city-win-inv { width: min(480px, 92vw); max-height: 70vh; }
 
 .farm-win-body { color: var(--ro-ink); }
@@ -2559,6 +2560,103 @@ body.walking #screen {
 }
 .farm-pot-lab { font-weight: 700; min-width: 2.4rem; }
 .farm-pot-id { width: auto; min-width: 8rem; margin: 0; padding: 0.2rem 0.35rem; }
+
+.farm-mob-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.15rem 0 0.45rem;
+  color: #1a1008;
+}
+.farm-mob-row b { color: #1a1008; }
+.farm-mob-row .ro-btn { padding: 0.22rem 0.55rem; font-size: 0.75rem; }
+.farm-mobs-body { color: #1a1008; }
+.farm-mobs-body .lead {
+  margin: 0 0 0.15rem;
+  font-weight: 700;
+  color: #1a1008;
+}
+.farm-mob-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.5rem;
+}
+.farm-mob-tools .ro-btn { padding: 0.28rem 0.6rem; font-size: 0.75rem; }
+.farm-mob-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 0.35rem;
+}
+.farm-mob-card {
+  appearance: none;
+  position: relative;
+  min-height: 88px;
+  width: 100%;
+  padding: 0.4rem 0.22rem 0.32rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.1rem;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+  color: #1a1008;
+}
+.farm-mob-card img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.farm-mob-emoji {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.85rem;
+  line-height: 1;
+}
+.farm-mob-card b {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #1a1008;
+  line-height: 1.2;
+}
+.farm-mob-card small {
+  font-size: 0.62rem;
+  color: #4a2c10;
+}
+.farm-mob-check {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--ro-outer);
+  background: var(--ro-hi);
+  box-shadow: inset 1px 1px 0 var(--ro-hi), inset -1px -1px 0 var(--ro-lo);
+  border-radius: 1px;
+}
+.farm-mob-card.on {
+  outline: 2px solid #3a2410;
+  background: #fff1c4;
+}
+.farm-mob-card.on .farm-mob-check {
+  background: #2d6a2d;
+  box-shadow: inset 1px 1px 0 #6aaa6a;
+}
+.farm-mob-card.on .farm-mob-check::after {
+  content: "✓";
+  display: block;
+  color: #fff8dc;
+  font-size: 10px;
+  line-height: 11px;
+  text-align: center;
+}
 
 .inv-tabs {
   display: flex;

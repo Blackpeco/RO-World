@@ -233,7 +233,7 @@
     if (victim.kind === "mob") {
       const reward = PVE.applyFieldRewards(S.save, victim.monsterId, S.rng);
       announceFieldReward(reward);
-      victim.deadUntil = nowMs() + (DATA.FIELD_RESPAWN_MS || 4000);
+      victim.deadUntil = nowMs() + DATA.fieldRespawnMs(S.rng);
       syncPlayerSave();
       paintHud(true);
       return;
@@ -357,6 +357,14 @@
     return other || ent;
   }
 
+  WORLD.noteManual = function (ms) {
+    if (!S) return;
+    S.manualUntil = nowMs() + (ms == null ? 1800 : ms);
+  };
+  WORLD.isManual = function () {
+    return !!(S && nowMs() < (S.manualUntil || 0));
+  };
+
   WORLD.cast = function (skillId, side) {
     if (!S || !skillId) return false;
     const ent = side === "right" && S.foe ? S.foe : S.player;
@@ -416,7 +424,7 @@
     if (ent.kind === "player") return;
     WORLD.setTarget(ent.id);
     if (S.mode === "arena") return;
-    if (S.save && S.save.autoFarm) return;
+    if (S.save && S.save.autoFarm) WORLD.noteManual(2000);
     const p = playerPos();
     const sid = basicSkillOf(S.player);
     if (sid && inSkillRange(S.player, ent, sid)) return;
@@ -676,6 +684,7 @@
       return;
     }
     if (p.sitting) setPlayerSitting(false);
+    if (WORLD.isManual() || (MAP && MAP.isManual && MAP.isManual())) return;
     const tgt = WORLD.pickFarmTarget(p);
     if (!tgt) return;
     if (WORLD.targetEntity() !== tgt) WORLD.setTarget(tgt.id);
@@ -722,9 +731,10 @@
     return best;
   }
 
-  WORLD.pickFarmTarget = function (player, ents) {
+  WORLD.pickFarmTarget = function (player, ents, save) {
     if (!player) return null;
     const list = ents || (S && S.entities) || [];
+    save = save || (S && S.save) || null;
     let best = null;
     let bestCost = Infinity;
     let bestCheb = Infinity;
@@ -733,6 +743,7 @@
     for (i = 0; i < list.length; i++) {
       const e = list[i];
       if (!e || e.dead || e.kind !== "mob") continue;
+      if (typeof PVE !== "undefined" && PVE.farmAllowsMob && !PVE.farmAllowsMob(save, e.monsterId)) continue;
       const cost = MAP && MAP.adjacentWalkCost ? MAP.adjacentWalkCost(player, e) : -1;
       if (cost < 0 || !isFinite(cost)) continue;
       const ch = chebyshev(player, e);

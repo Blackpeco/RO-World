@@ -40,3 +40,21 @@ Tabs (`UI._invTab`): **ใช้ / ยา** · **สวมใส่** · **ว�
 SKILL K · STATUS C · **FARM** · **INV I** · สวมใส่ E · ร้านอุปกรณ์ R · ตีบวก · ร้านยา R · SAVE.
 
 S stays walk south. Do not bind S to save or sit.
+
+## เลือกมอนเตอร์ (`farm-mobs`)
+
+Opened from AUTO FARM → **เลือกมอน** (`App.goFarmMobs` / `toggleCityWin("farm-mobs")`). No extra dock button. Title เลือกมอนเตอร์; subtitle ทุ่งพรอนเทรา (city/field) or ปราสาทโลหิต. Cards show portrait + Thai name, multi-select.
+
+`save.autoFarmCfg.mobIds` is a unique string[] of monster ids Auto Farm will attack.
+
+| State | Meaning |
+|---|---|
+| `mobIds []` and `mobNone` false | attack **ALL** types on that map |
+| `mobIds` has ids | attack only those ids |
+| `mobNone` true (`mobIds` empty) | attack **none** (ล้างทั้งหมด) |
+
+Adding any id sets `mobNone = false`. If the selection equals the full current catalog, store `[]` (treat as all). Unknown ids are stripped against the field + boss catalogs. `__none__` in `mobIds` is read as `mobNone`.
+
+Helpers: `fieldMonsterIds`, `farmMobCatalog` (field defs in city/field — hint มอนในทุ่งพรอนเทรา; `DATA.BOSSES` on bosses), `farmAllowsMob`, `toggleFarmMob`, `setFarmMobsAll`, `setFarmMobsNone`.
+
+`PVE.farmAllowsMob` is the gate. `WORLD.pickFarmTarget` filter is owned elsewhere — do not implement it here.

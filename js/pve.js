@@ -130,7 +130,9 @@
           { id: null, when: "hp", pct: 40 },
           { id: null, when: "mp", pct: 20 },
           { id: null, when: "hp", pct: 50 }
-        ]
+        ],
+        mobIds: [],
+        mobNone: false
       },
       materials: {},
       currentBossId: null,
@@ -247,7 +249,174 @@
       };
     }
     c.pots.length = 3;
+    PVE.sanitizeFarmMobs(save, c);
     return c;
+  };
+
+  /* Prontera field bands in js/map.js (near/mid/far/deep). */
+  PVE.FIELD_MONSTER_IDS = [
+    "poring", "fabre", "lunatic", "willow", "condor",
+    "wolf", "poporing", "chonchon", "roda_frog",
+    "spore", "rocker", "steel_chonchon",
+    "savage_babe", "elder_willow", "skeleton"
+  ];
+
+  /**
+   * Unique field monster ids. Prefer live MAP.listFieldSpawns(); else the static band list.
+   */
+  PVE.fieldMonsterIds = function () {
+    var fallback = PVE.FIELD_MONSTER_IDS.slice();
+    var mapApi = root.MAP;
+    var raw = [];
+    try {
+      if (mapApi && typeof mapApi.listFieldSpawns === "function") {
+        raw = mapApi.listFieldSpawns() || [];
+      }
+    } catch (e) {
+      raw = [];
+    }
+    var seen = {};
+    var fromMap = [];
+    raw.forEach(function (sp) {
+      var id = sp && sp.monsterId != null ? String(sp.monsterId) : "";
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      fromMap.push(id);
+    });
+    if (!fromMap.length) return fallback;
+    var out = [];
+    fallback.forEach(function (id) {
+      if (seen[id]) {
+        out.push(id);
+        seen[id] = false;
+      }
+    });
+    fromMap.forEach(function (id) {
+      if (seen[id]) out.push(id);
+    });
+    return out;
+  };
+
+  PVE.farmKnownMobIds = function () {
+    var known = {};
+    PVE.fieldMonsterIds().forEach(function (id) { known[id] = true; });
+    (DATA.MONSTERS || []).forEach(function (m) {
+      if (m && m.id) known[String(m.id)] = true;
+    });
+    (DATA.BOSSES || []).forEach(function (b) {
+      if (b && b.id) known[String(b.id)] = true;
+    });
+    return known;
+  };
+
+  /**
+   * Monster defs Auto Farm can pick on the current map.
+   * bosses → DATA.BOSSES; city/field → Prontera field catalog (set in town, walk out).
+   */
+  PVE.farmMobCatalog = function (save) {
+    if (save && save.mapId === "bosses") {
+      return (DATA.BOSSES || []).slice();
+    }
+    var ids = PVE.fieldMonsterIds();
+    var out = [];
+    ids.forEach(function (id) {
+      var def = DATA.findMonster ? DATA.findMonster(id) : null;
+      if (def && def.id === id) out.push(def);
+      else if (DATA.MONSTERS) {
+        var hit = DATA.MONSTERS.find(function (m) { return m && m.id === id; });
+        if (hit) out.push(hit);
+      }
+    });
+    return out;
+  };
+
+  /**
+   * mobIds [] + mobNone false = attack ALL types on that map.
+   * mobNone true = attack none (cleared checks). Adding any id sets mobNone false.
+   * Unknown ids stripped against field+boss catalogs. Unique strings only.
+   */
+  PVE.sanitizeFarmMobs = function (save, c) {
+    c = c || (save && save.autoFarmCfg);
+    if (!c || typeof c !== "object") return c;
+    if (!Array.isArray(c.mobIds)) c.mobIds = [];
+    c.mobNone = !!c.mobNone;
+    var known = PVE.farmKnownMobIds();
+    var seen = {};
+    var cleaned = [];
+    var i;
+    for (i = 0; i < c.mobIds.length; i++) {
+      var mid = c.mobIds[i] == null ? "" : String(c.mobIds[i]);
+      if (mid === "__none__") {
+        c.mobNone = true;
+        continue;
+      }
+      if (!mid || seen[mid] || !known[mid]) continue;
+      seen[mid] = true;
+      cleaned.push(mid);
+    }
+    c.mobIds = cleaned;
+    if (c.mobIds.length) c.mobNone = false;
+    var cat = PVE.farmMobCatalog(save);
+    if (!c.mobNone && cat.length && c.mobIds.length === cat.length) {
+      var allOn = true;
+      for (i = 0; i < cat.length; i++) {
+        if (!cat[i] || !seen[cat[i].id]) { allOn = false; break; }
+      }
+      if (allOn) c.mobIds = [];
+    }
+    return c;
+  };
+
+  PVE.farmAllowsMob = function (save, monsterId) {
+    if (!save) return true;
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    if (cfg.mobNone) return false;
+    if (!cfg.mobIds || !cfg.mobIds.length) return true;
+    var id = monsterId == null ? "" : String(monsterId);
+    return cfg.mobIds.indexOf(id) >= 0;
+  };
+
+  PVE.toggleFarmMob = function (save, monsterId) {
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var id = monsterId == null ? "" : String(monsterId);
+    if (!id || id === "__none__") return cfg;
+    var catalog = PVE.farmMobCatalog(save);
+    var inCat = false;
+    var i;
+    for (i = 0; i < catalog.length; i++) {
+      if (catalog[i] && catalog[i].id === id) { inCat = true; break; }
+    }
+    if (!inCat) return cfg;
+    var selected = {};
+    if (cfg.mobNone || !cfg.mobIds.length) {
+      selected[id] = true;
+    } else {
+      for (i = 0; i < cfg.mobIds.length; i++) selected[cfg.mobIds[i]] = true;
+      if (selected[id]) delete selected[id];
+      else selected[id] = true;
+    }
+    var ids = [];
+    for (i = 0; i < catalog.length; i++) {
+      var cid = catalog[i] && catalog[i].id;
+      if (cid && selected[cid]) ids.push(cid);
+    }
+    cfg.mobNone = ids.length === 0;
+    cfg.mobIds = (!cfg.mobNone && ids.length === catalog.length) ? [] : ids;
+    return cfg;
+  };
+
+  PVE.setFarmMobsAll = function (save) {
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    cfg.mobIds = [];
+    cfg.mobNone = false;
+    return cfg;
+  };
+
+  PVE.setFarmMobsNone = function (save) {
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    cfg.mobIds = [];
+    cfg.mobNone = true;
+    return cfg;
   };
 
   PVE.learnedSkillIds = function (save) {

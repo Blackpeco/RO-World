@@ -521,6 +521,7 @@
     else if (next === "refine") App.goRefine();
     else if (next === "save") UI.openCityWin("save", App.save);
     else if (next === "farm") App.goFarm();
+    else if (next === "farm-mobs") App.goFarmMobs();
     else if (next === "inv") App.goInv();
   };
 
@@ -635,6 +636,30 @@
     if (!App.save) return;
     PVE.ensureProgress(App.save);
     UI.openCityWin("farm", App.save);
+  };
+
+  App.goFarmMobs = function () {
+    if (!App.save) return;
+    PVE.ensureProgress(App.save);
+    UI.openCityWin("farm-mobs", App.save);
+  };
+
+  App.toggleFarmMob = function (id) {
+    if (!App.save) return;
+    PVE.toggleFarmMob(App.save, id);
+    UI.openCityWin("farm-mobs", App.save);
+  };
+
+  App.setFarmMobsAll = function () {
+    if (!App.save) return;
+    PVE.setFarmMobsAll(App.save);
+    UI.openCityWin("farm-mobs", App.save);
+  };
+
+  App.setFarmMobsNone = function () {
+    if (!App.save) return;
+    PVE.setFarmMobsNone(App.save);
+    UI.openCityWin("farm-mobs", App.save);
   };
 
   App.goInv = function () {
@@ -1052,6 +1077,7 @@
 
   App.useSkill = function (skillId) {
     if (typeof WORLD !== "undefined" && WORLD.live && WORLD.live()) {
+      if (WORLD.noteManual) WORLD.noteManual(1800);
       WORLD.cast(skillId, "left");
       return;
     }
@@ -1593,7 +1619,10 @@
           ev.preventDefault();
           const skills = WORLD.hotbarSkills("left");
           const sid = skills[Number(ev.key) - 1];
-          if (sid) WORLD.cast(sid, "left");
+          if (sid) {
+            if (WORLD.noteManual) WORLD.noteManual(1800);
+            WORLD.cast(sid, "left");
+          }
           return;
         }
         const model = WORLD.hudModel && WORLD.hudModel();

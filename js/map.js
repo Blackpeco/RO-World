@@ -1366,9 +1366,18 @@
     stopWalk();
   };
 
+  var manualUntil = 0;
+  MAP.markManual = function (ms) {
+    manualUntil = Date.now() + (ms == null ? 1800 : ms);
+    if (root.WORLD && WORLD.noteManual) WORLD.noteManual(ms);
+  };
+  MAP.isManual = function () {
+    return Date.now() < manualUntil;
+  };
+
   MAP.listFieldSpawns = function () {
     return ensureFieldMobs().map(function (m) {
-      return { uid: m.uid, monsterId: m.monsterId, x: m.x, y: m.y };
+      return { uid: m.uid, monsterId: m.monsterId, x: m.x, y: m.y, deadUntil: m.deadUntil };
     });
   };
 
@@ -1630,7 +1639,7 @@
 
   MAP.markMobDead = function (x, y) {
     ensureFieldMobs().forEach(function (m) {
-      if (m.x === x && m.y === y) m.deadUntil = Date.now() + (DATA.FIELD_RESPAWN_MS || 4000);
+      if (m.x === x && m.y === y) m.deadUntil = Date.now() + DATA.fieldRespawnMs();
     });
   };
 
@@ -1818,6 +1827,7 @@
     let bestCheb = Infinity;
     let bestManh = Infinity;
     mobs.forEach(function (m) {
+      if (typeof PVE !== "undefined" && PVE.farmAllowsMob && saveRef && !PVE.farmAllowsMob(saveRef, m.monsterId)) return;
       const cost = MAP.adjacentWalkCost(from, m);
       if (cost < 0 || !isFinite(cost)) return;
       const ch = Math.max(Math.abs(from.x - m.x), Math.abs(from.y - m.y));
@@ -1838,6 +1848,7 @@
 
   function tickAutoFarm() {
     if (root.WORLD && WORLD.live && WORLD.live()) return;
+    if (MAP.isManual()) return;
     if (!saveRef || !saveRef.autoFarm || zoneId !== "field" || walking) return;
     if (Date.now() < pauseUntil) return;
     const p = pos();
@@ -2049,7 +2060,7 @@
     if (!axis) return;
     ev.preventDefault();
     keysHeld[axis] = true;
-    if (saveRef.autoFarm && zoneId === "field") return;
+    MAP.markManual(2000);
     const v = heldMove();
     if (!v.dx && !v.dy) return;
     stopWalk();
@@ -2091,12 +2102,14 @@
     }
     if (!MAP.isWalkable(x, y) && !MAP.monsterAt(x, y) && !MAP.npcAt(x, y) && !MAP.bossAt(x, y)) return;
     if (p.x === x && p.y === y) return;
+    MAP.markManual(2000);
     walkPath(MAP.path(p, { x: x, y: y }));
   }
 
   function startPad(dx, dy) {
     const world = screenDirToWorld(dx, dy);
     stopWalk();
+    MAP.markManual(2000);
     padDir = { x: world.x, y: world.y };
     tryStep(world.x, world.y);
     if (padTimer) clearInterval(padTimer);

@@ -1615,6 +1615,9 @@
     PVE.ensureProgress(save);
     var cfg = PVE.ensureAutoFarmCfg(save);
     var farmOn = !!save.autoFarm;
+    var mobLabel = "ทุกตัว";
+    if (cfg.mobNone) mobLabel = "0 ชนิด";
+    else if (cfg.mobIds && cfg.mobIds.length) mobLabel = cfg.mobIds.length + " ชนิด";
     var learned = PVE.learnedSkillIds(save);
     var pal = learned.map(function (id) {
       var def = DATA.SKILLS[id] || {};
@@ -1680,6 +1683,10 @@
       ' onchange="App.setAutoFarm(this.checked)"> <b>เปิด Auto Farm</b></label>' +
       '<span class="farm-on-flag">' + (farmOn ? "ON" : "OFF") + "</span>" +
       "</div>" +
+      '<div class="farm-mob-row">' +
+      "<span>มอนที่จะตี: <b>" + UI.esc(mobLabel) + "</b></span>" +
+      '<button type="button" class="ro-btn" onclick="App.goFarmMobs()">เลือกมอน</button>' +
+      "</div>" +
       " <h3>นั่งพัก</h3>" +
       '<div class="farm-sit-row">' +
       '<label><input type="checkbox"' + (cfg.sitHpOn ? " checked" : "") +
@@ -1700,6 +1707,57 @@
       '<div class="farm-skill-row">' + slots + "</div>" +
       " <h3>ยาออโต้</h3>" +
       '<div class="farm-pots">' + potRows + "</div>" +
+      "</div>"
+    );
+  };
+
+  UI.farmMobsWin = function (save) {
+    PVE.ensureProgress(save);
+    var cfg = PVE.ensureAutoFarmCfg(save);
+    var bosses = !!(save && save.mapId === "bosses");
+    var subtitle = bosses ? "ปราสาทโลหิต" : "ทุ่งพรอนเทรา";
+    var catalog = PVE.farmMobCatalog(save);
+    var selected = {};
+    var allOn = !cfg.mobNone && (!cfg.mobIds || !cfg.mobIds.length);
+    if (!allOn && !cfg.mobNone && cfg.mobIds) {
+      cfg.mobIds.forEach(function (id) { selected[id] = true; });
+    }
+    var tools =
+      '<div class="farm-mob-tools">' +
+      '<button type="button" class="ro-btn" onclick="App.setFarmMobsAll()">เลือกทั้งหมด</button>' +
+      '<button type="button" class="ro-btn" onclick="App.setFarmMobsNone()">ล้างทั้งหมด</button>' +
+      "</div>";
+    var hint = bosses ? "" : '<p class="hint">มอนในทุ่งพรอนเทรา</p>';
+    var cards = "";
+    if (!catalog.length) {
+      cards = '<p class="hint">ยังไม่มีมอนในแผนที่นี้</p>';
+    } else {
+      cards = '<div class="farm-mob-grid">' + catalog.map(function (def) {
+        var id = def && def.id ? String(def.id) : "";
+        var on = allOn || !!(id && selected[id]);
+        var src = def.portrait || def.sprite || "";
+        var art = src
+          ? '<img src="' + UI.esc(src) + '" alt="">'
+          : '<span class="farm-mob-emoji">' + UI.esc(def.emoji || "") + "</span>";
+        var lv = def.level != null ? "<small>Lv." + UI.esc(def.level) + "</small>" : "";
+        return (
+          '<button type="button" class="ro-slot farm-mob-card' + (on ? " on" : "") +
+          '" data-id="' + UI.esc(id) +
+          '" onclick="App.toggleFarmMob(this.dataset.id)">' +
+          '<span class="farm-mob-check" aria-hidden="true"></span>' +
+          art +
+          "<b>" + UI.esc(def.name || id) + "</b>" +
+          lv +
+          "</button>"
+        );
+      }).join("") + "</div>";
+    }
+    return (
+      '<div class="farm-mobs-body">' +
+      '<p class="lead">' + UI.esc(subtitle) + "</p>" +
+      hint +
+      tools +
+      cards +
       "</div>"
     );
   };
@@ -1897,6 +1955,7 @@
       save: "SAVE",
       farm: "AUTO FARM",
       inv: "INVENTORY / กระเป๋า",
+      "farm-mobs": "เลือกมอนเตอร์",
     };
     if (!titles[kind]) return;
     UI._cityWinKind = kind;
@@ -1929,6 +1988,8 @@
       inner = UI.farmWin(save);
     } else if (kind === "inv") {
       inner = UI.invWin(save);
+    } else if (kind === "farm-mobs") {
+      inner = UI.farmMobsWin(save);
     }
     overlay.innerHTML =
       '<div class="ro-win city-win city-win-' + kind + '">' +

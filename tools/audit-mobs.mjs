@@ -82,6 +82,9 @@ ids.forEach((id) => {
     if (d.kind !== row[0] || d.id !== row[1] || d.chance !== row[2]) drift.push(id + " drop " + i + " " + JSON.stringify(d));
   });
   if (!existsSync(join(root, "assets/mobs/" + id + ".png"))) drift.push(id + " no sprite");
+  ["s", "n", "e", "se", "ne"].forEach((d) => {
+    if (!existsSync(join(root, "assets/mobs/" + id + "_" + d + ".png"))) drift.push(id + " no " + d);
+  });
   const c = wantCombat[id];
   if (c) {
     ["hp", "aspeed", "atk", "matk", "baseExp", "jobExp", "zenoMin", "zenoMax"].forEach((k) => {
@@ -103,8 +106,34 @@ const bands = { near: {}, mid: {}, far: {}, deep: {} };
 });
 const have = new Set((g.mobs || []).map((m) => m.monsterId));
 ids.forEach((id) => { if (!have.has(id)) drift.push("field missing " + id); });
+const bandOk = {
+  near: { poring: 1, fabre: 1, lunatic: 1, willow: 1, condor: 1 },
+  mid: { wolf: 1, poporing: 1, chonchon: 1, roda_frog: 1 },
+  far: { spore: 1, rocker: 1, steel_chonchon: 1 },
+  deep: { savage_babe: 1, elder_willow: 1, skeleton: 1 },
+};
+Object.keys(bands).forEach((b) => {
+  Object.keys(bands[b]).forEach((id) => {
+    if (!bandOk[b][id]) drift.push("band " + b + " has " + id);
+  });
+});
+if (!spawn || spawn.x !== 5 || spawn.y !== 94) drift.push("spawn " + JSON.stringify(spawn));
+if ((g.mobs || []).length !== 48) drift.push("mobs " + (g.mobs || []).length);
+const FX = ctx.FX;
+if (!FX || typeof FX.mobFacingArt !== "function") drift.push("no mobFacingArt");
+else {
+  const nw = FX.mobFacingArt("nw");
+  if (!(nw.base === "ne" && nw.flip)) drift.push("mobFacingArt nw");
+  const src = FX.spriteSrc("poring", { isMonster: true, facing: "nw" });
+  if (src !== "assets/mobs/poring_ne.png") drift.push("spriteSrc not mobFacingArt " + src);
+  if (FX.facingArt("ne").base !== "n") drift.push("hero facingArt ne drifted");
+}
+const wolf = STATS.computeMonsterStats(DATA.MONSTERS.find((x) => x.id === "wolf") || {});
 console.log("DRIFT", drift.length);
 drift.forEach((d) => console.log(d));
 console.log("ROSTER", idsLive.join(","));
 console.log("BANDS", JSON.stringify(bands));
 console.log("MOBS", (g.mobs || []).length);
+console.log("SPAWN", spawn && spawn.x, spawn && spawn.y);
+console.log("WOLF", wolf.hit, wolf.flee, wolf.softDef, wolf.softMdef, wolf.hardDef, wolf.hardMdef);
+console.log("SPRITES", ids.every((id) => ["s","n","e","se","ne"].every((d) => existsSync(join(root, "assets/mobs/" + id + "_" + d + ".png")))) ? "15x5 ok" : "missing");
