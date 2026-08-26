@@ -146,11 +146,43 @@
     return { base: f, flip: false };
   };
 
+  FX.mobFacingArt = function (facing) {
+    const f = facing || "s";
+    if (f === "w") return { base: "e", flip: true };
+    if (f === "sw") return { base: "se", flip: true };
+    if (f === "nw") return { base: "ne", flip: true };
+    if (f === "n" || f === "ne" || f === "e" || f === "se" || f === "s") {
+      return { base: f, flip: false };
+    }
+    return { base: "s", flip: false };
+  };
+
+  FX.mob404s = [];
+
+  FX.mobStillSrc = function (id, unit) {
+    if (unit && unit.sprite) return unit.sprite;
+    return "assets/mobs/" + id + ".png";
+  };
+
+  FX.mobDirSrc = function (id, base) {
+    return "assets/mobs/" + id + "_" + base + ".png";
+  };
+
+  FX.noteMob404 = function (path) {
+    if (!path) return;
+    if (FX.mob404s.indexOf(path) === -1) FX.mob404s.push(path);
+  };
+
   FX.spriteSrc = function (id, unit) {
     if (unit && unit.isMonster) {
-      if (unit.sprite) return unit.sprite;
-      const mid = unit.heroId || unit.monsterId || id || "poring";
-      return "assets/mobs/" + mid + ".png";
+      const mid = unit.monsterId || unit.heroId || id || "poring";
+      const facing = unit.facing || unit.dir || "s";
+      const art = FX.mobFacingArt(facing);
+      const dirPath = FX.mobDirSrc(mid, art.base);
+      if (FX.mob404s.indexOf(dirPath) !== -1) {
+        return FX.mobStillSrc(mid, unit);
+      }
+      return dirPath;
     }
     const hid = id || (unit && unit.heroId) || "warrior";
     const facing = (unit && (unit.facing || unit.dir)) || (typeof MAP !== "undefined" && MAP.facing) || "s";
@@ -189,9 +221,12 @@
     }, 220);
   };
 
-  FX.applyFacing = function (el, facing) {
+  FX.applyFacing = function (el, facing, opts) {
     if (!el) return;
-    const art = FX.facingArt(facing);
+    const isMob = !!(opts && opts.isMonster) ||
+      !!(el.classList && el.classList.contains("mob")) ||
+      !!(el.getAttribute && el.getAttribute("data-mob"));
+    const art = isMob ? FX.mobFacingArt(facing) : FX.facingArt(facing);
     const sx = art.flip ? "-1" : "1";
     el.style.setProperty("--face-sx", sx);
     el.classList.toggle("face-flip", !!art.flip);

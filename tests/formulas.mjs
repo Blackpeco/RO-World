@@ -1066,6 +1066,48 @@ console.log("8-dir facing");
   assert(nWalk === "assets/chars/hunter_n.png", "north walk keeps 8-dir sprite, got " + nWalk);
 }
 
+console.log("8-dir mob facing");
+{
+  const FX = ctx.FX;
+  const ne = FX.mobFacingArt("ne");
+  assert(ne.base === "ne" && !ne.flip, "mob ne is ne no flip");
+  const nw = FX.mobFacingArt("nw");
+  assert(nw.base === "ne" && nw.flip, "mob nw flips ne");
+  const w = FX.mobFacingArt("w");
+  assert(w.base === "e" && w.flip, "mob w flips e");
+  const sw = FX.mobFacingArt("sw");
+  assert(sw.base === "se" && sw.flip, "mob sw flips se");
+  const idle = FX.mobFacingArt();
+  assert(idle.base === "s" && !idle.flip, "mob default facing s");
+  const empty = FX.mobFacingArt("");
+  assert(empty.base === "s" && !empty.flip, "mob empty facing s");
+  assert(FX.facingArt("ne").base === "n" && !FX.facingArt("ne").flip, "hero ne still uses n");
+  assert(FX.facingArt("nw").base === "n" && FX.facingArt("nw").flip, "hero nw still flips n");
+
+  const eSrc = FX.spriteSrc("poring", { isMonster: true, facing: "e" });
+  assert(eSrc === "assets/mobs/poring_e.png", "poring e dir path, got " + eSrc);
+  const wSrc = FX.spriteSrc("poring", { isMonster: true, facing: "w" });
+  assert(wSrc === "assets/mobs/poring_e.png", "poring w uses e file, got " + wSrc);
+  const neSrc = FX.spriteSrc("poring", { isMonster: true, facing: "ne" });
+  assert(neSrc === "assets/mobs/poring_ne.png", "poring ne dir path, got " + neSrc);
+  const nwSrc = FX.spriteSrc("poring", { isMonster: true, facing: "nw" });
+  assert(nwSrc === "assets/mobs/poring_ne.png", "poring nw uses ne file, got " + nwSrc);
+  const sSrc = FX.spriteSrc("poring", { isMonster: true, facing: "s" });
+  assert(sSrc === "assets/mobs/poring_s.png", "poring s dir path, got " + sSrc);
+
+  const ids = ["poring", "fabre", "lunatic", "willow", "condor", "wolf", "poporing", "chonchon", "roda_frog", "spore", "rocker", "steel_chonchon", "savage_babe", "elder_willow", "skeleton"];
+  ids.forEach(function (id) {
+    const src = FX.spriteSrc(id, { isMonster: true, facing: "s" });
+    assert(src === "assets/mobs/" + id + "_s.png", id + " s prefers dir path, got " + src);
+  });
+
+  FX.noteMob404("assets/mobs/poring_e.png");
+  const after = FX.spriteSrc("poring", { isMonster: true, facing: "e" });
+  assert(after === "assets/mobs/poring.png", "after 404 e falls back to still, got " + after);
+  const afterSpr = FX.spriteSrc("poring", { isMonster: true, facing: "e", sprite: "assets/mobs/custom.png" });
+  assert(afterSpr === "assets/mobs/custom.png", "after 404 uses unit.sprite if set, got " + afterSpr);
+}
+
 console.log("audio helper");
 {
   const AUDIO = ctx.AUDIO;
@@ -1543,7 +1585,7 @@ console.log("field near hunting plain");
   Object.keys(g.cells).forEach(function (k) {
     if (g.cells[k] === "X") xN += 1;
   });
-  assert(xN === 20, "20 X-pad tiles, got " + xN);
+  assert(xN === 9, "9 X-pad tiles, got " + xN);
 
   const marks = MAP.FIELD_OVER_MARKS || [];
   assert(marks.some(function (m) { return m.kind === "gate"; }), "overlay has gate");
@@ -1650,6 +1692,411 @@ console.log("8-dir walk");
   assert(trail.length === 4, "diagonal path to +4,+4 is 4 steps, got " + trail.length);
   const first = trail[0];
   assert(first && first.x !== spawn.x && first.y !== spawn.y, "path to +4,+4 starts with a diagonal step");
+}
+
+console.log("farm walk cost + reachable retarget");
+{
+  const WORLD = ctx.WORLD;
+  MAP.setZone("field");
+  const g = MAP.ZONES.field.grid;
+  const from = { x: 10, y: 90 };
+  const behind = { x: 16, y: 90 };
+  const open = { x: 10, y: 84 };
+  const isolated = { x: 22, y: 90 };
+  const wallX = 13;
+  const saved = [];
+  function remember(x, y) {
+    saved.push({ x: x, y: y, walk: !!(g.walkable[y] && g.walkable[y][x]) });
+  }
+  function setWalk(x, y, on) {
+    remember(x, y);
+    if (!g.walkable[y]) g.walkable[y] = [];
+    g.walkable[y][x] = on;
+  }
+  try {
+    for (let y = 80; y <= 96; y++) {
+      for (let x = 8; x <= 24; x++) setWalk(x, y, true);
+    }
+    for (let y = 85; y <= 95; y++) setWalk(wallX, y, false);
+    for (let y = 88; y <= 92; y++) {
+      for (let x = 21; x <= 23; x++) setWalk(x, y, false);
+    }
+    setWalk(isolated.x, isolated.y, true);
+
+    const cheb = Math.max(Math.abs(from.x - behind.x), Math.abs(from.y - behind.y));
+    const around = MAP.path(from, behind);
+    const last = around[around.length - 1];
+    assert(around.length > cheb, "path around wall is longer than chebyshev (" + around.length + " > " + cheb + ")");
+    assert(last && last.x === behind.x && last.y === behind.y, "detour path reaches the far side of the wall");
+
+    assert(MAP.adjacentWalkCost(from, { x: from.x + 1, y: from.y }) === 0, "adjacentWalkCost is 0 when already chebyshev<=1");
+    const blockedCost = MAP.adjacentWalkCost(from, behind);
+    const openCost = MAP.adjacentWalkCost(from, open);
+    assert(blockedCost > 0, "blocked mob has a finite detour cost, got " + blockedCost);
+    assert(openCost > 0 && openCost < blockedCost, "open mob path " + openCost + " shorter than walled mob " + blockedCost);
+    assert(MAP.adjacentWalkCost(from, isolated) === -1, "isolated mob with no adjacent path is -1");
+    assert(MAP.walkToAdjacent(from, isolated) === false, "walkToAdjacent returns false when no adjacent path");
+    assert(MAP.walkToAdjacent(from, { x: from.x + 1, y: from.y }) === true, "walkToAdjacent returns true when already adjacent");
+
+    const player = { x: from.x, y: from.y, kind: "player" };
+    const closeWall = { id: "m-wall", kind: "mob", x: behind.x, y: behind.y, dead: false };
+    const farOpen = { id: "m-open", kind: "mob", x: open.x, y: open.y, dead: false };
+    const deadClose = { id: "m-dead", kind: "mob", x: from.x + 1, y: from.y, dead: true };
+    const boxed = { id: "m-box", kind: "mob", x: isolated.x, y: isolated.y, dead: false };
+    const picked = WORLD.pickFarmTarget(player, [player, closeWall, farOpen, deadClose, boxed]);
+    assert(picked === farOpen, "pickFarmTarget prefers shorter walk path over manhattan-closer mob behind a wall");
+    assert(WORLD.pickFarmTarget(player, [player, boxed]) === null, "pickFarmTarget skips mobs with no adjacent path");
+  } finally {
+    saved.reverse().forEach(function (c) {
+      if (!g.walkable[c.y]) g.walkable[c.y] = [];
+      g.walkable[c.y][c.x] = c.walk;
+    });
+  }
+}
+
+
+console.log("prontera art lock: flowers, houses, 3x3 warps, npcs");
+{
+  MAP.setZone("city");
+  const cg = MAP.ZONES.city.grid;
+  assert(cg.cols === 80 && cg.rows === 80, "city still 80x80, got " + cg.cols + "x" + cg.rows);
+  assert(cg.houseLots && cg.houseLots.sw === 7 && cg.houseLots.se === 7, "houseLots sw/se unchanged 7/7, got " + JSON.stringify(cg.houseLots));
+
+  let bN = 0;
+  let gN = 0;
+  let kN = 0;
+  let flowerViaHash = 0;
+  for (let y = 0; y < cg.rows; y++) {
+    for (let x = 0; x < cg.cols; x++) {
+      const ch = cg.cells[x + "," + y] || "";
+      const walk = !!(cg.walkable[y] && cg.walkable[y][x]);
+      if (ch === "B") bN += 1;
+      if (ch === "G") {
+        gN += 1;
+        assert(MAP.gateAt(x, y) === "field", "G " + x + "," + y + " gateAt field");
+      }
+      if (ch === "K") {
+        kN += 1;
+        assert(MAP.gateAt(x, y) === "bosses", "K " + x + "," + y + " gateAt bosses");
+      }
+      const cls = MAP.tileClass(x, y, walk, true);
+      if (walk && MAP.flowerAt(x, y) && cls.indexOf("flower") >= 0 && ch !== "B") flowerViaHash += 1;
+    }
+  }
+  assert(flowerViaHash === 0, "city walk tiles do not get flower via flowerAt, got " + flowerViaHash);
+  assert(bN >= 4 && bN <= 8, "plaza B in 4..8, got " + bN);
+  assert(gN === 9, "G tiles === 9, got " + gN);
+  assert(kN === 9, "K tiles === 9, got " + kN);
+
+  MAP._cityMarks = null;
+  const marks = MAP.cityLandmarks();
+  const houses = marks.filter(function (m) { return m.kind === "house"; });
+  assert(houses.length > 0, "cityLandmarks has houses");
+  houses.forEach(function (m) {
+    assert(m.w >= 9 && m.w <= 11 && m.h >= 13 && m.h <= 15, "house w/h " + m.w + "x" + m.h);
+  });
+  const seLots = (cg.lotPts && cg.lotPts.se) || [];
+  seLots.forEach(function (pt) {
+    if (pt[1] > 46) return;
+    const house = houses.find(function (h) {
+      return Math.abs(h.x - (pt[0] + 1.6)) < 0.05;
+    });
+    assert(house, "se lot " + pt[0] + "," + pt[1] + " has house");
+    assert(house.y - house.h >= 42.5, "se lot " + pt[0] + "," + pt[1] + " roof " + (house.y - house.h) + " off ribbon");
+  });
+  marks.filter(function (m) { return m.kind === "shop"; }).forEach(function (m) {
+    assert(m.w >= 8, "shop w>=8, got " + m.w);
+  });
+  const castle = marks.find(function (m) { return m.kind === "castle"; });
+  assert(castle && castle.w >= 15, "castle w>=15, got " + (castle && castle.w));
+
+  assert(MAP.npcAt(24, 40) && MAP.npcAt(24, 40).id === "gear", "W npcAt gear");
+  assert(MAP.npcAt(56, 40) && MAP.npcAt(56, 40).id === "potion", "P npcAt potion");
+  let sAt = null;
+  Object.keys(cg.cells).forEach(function (k) {
+    if (cg.cells[k] === "S") {
+      const p = k.split(",");
+      sAt = { x: Number(p[0]), y: Number(p[1]) };
+    }
+  });
+  assert(sAt && MAP.npcAt(sAt.x, sAt.y) && MAP.npcAt(sAt.x, sAt.y).id === "kafra", "S npcAt kafra");
+
+  MAP.setZone("field");
+  const fg = MAP.ZONES.field.grid;
+  let xN = 0;
+  Object.keys(fg.cells).forEach(function (k) {
+    if (fg.cells[k] !== "X") return;
+    xN += 1;
+    const p = k.split(",");
+    assert(MAP.gateAt(Number(p[0]), Number(p[1])) === "city", "X " + k + " gateAt city");
+  });
+  assert(xN === 9, "field X tiles === 9, got " + xN);
+  MAP.setZone("bosses");
+}
+
+
+console.log("locked Archer bow ATK + 1st-job bow skills");
+{
+  const WORLD = ctx.WORLD;
+  const noBow = STATS.computeBowAtk({ level: 1, str: 1, dex: 1, luk: 1 });
+  assert(noBow.ok === false, "no bow → computeBowAtk ok:false, got " + noBow.ok);
+  const unarmed = COMBAT.unitBowAtk(dummy({ level: 1 }), {});
+  assert(!unarmed.ok, "unarmed unitBowAtk refuses bow pipeline");
+
+  const a = STATS.computeBowAtk({
+    level: 1, str: 1, dex: 1, luk: 1,
+    baseWeaponAtk: 15, weaponLevel: 1, refine: 0, arrowAtk: 25,
+    size: "M", variance: "mid", element: 1,
+  });
+  assert(a.ok && a.statusAtk === 1, "Lv1 StatusATK 1, got " + a.statusAtk);
+  assert(a.weaponAtk === 15, "Lv1 WeaponATK 15, got " + a.weaponAtk);
+  assert(a.extraAtk === 25, "Lv1 ExtraATK 25, got " + a.extraAtk);
+  assert(a.atk === 42, "Lv1 Bow15 Arrow25 ATK 42, got " + a.atk);
+  assert(Number.isInteger(a.atk) && Number.isInteger(a.weaponAtk) && Number.isInteger(a.statusAtk), "Lv1 ATK pieces are integers");
+
+  const b = STATS.computeBowAtk({
+    level: 40, str: 20, dex: 50, luk: 10,
+    baseWeaponAtk: 29, weaponLevel: 1, refine: 4, arrowAtk: 25,
+    size: "M", variance: "mid", element: 1,
+  });
+  assert(b.statusAtk === 67, "Lv40 StatusATK 67, got " + b.statusAtk);
+  assert(b.refineBonus === 8, "WLv1 +4 refine +8, got " + b.refineBonus);
+  assert(almost(b.statBonus, 7.25), "StatBonus 29*50/200=7.25, got " + b.statBonus);
+  assert(b.weaponAtk === 44, "Composite +4 WeaponATK 44, got " + b.weaponAtk);
+  assert(b.extraAtk === 25, "Composite Extra 25, got " + b.extraAtk);
+  assert(b.atk === 203, "Lv40 Composite+4 ATK 203, got " + b.atk);
+  assert(Number.isInteger(b.atk) && Number.isInteger(b.weaponAtk), "Lv40 ATK integers");
+
+  const cOpts = {
+    level: 99, str: 20, dex: 99, luk: 20,
+    baseWeaponAtk: 125, weaponLevel: 3, refine: 5, arrowAtk: 30, equipAtk: 50,
+    size: "M", variance: "mid", element: 1,
+  };
+  const c = STATS.computeBowAtk(cOpts);
+  assert(c.statusAtk === 133, "Lv99 StatusATK 133, got " + c.statusAtk);
+  assert(c.weaponAtk === 211, "Hunter WLv3 +5 WeaponATK 211, got " + c.weaponAtk);
+  assert(c.extraAtk === 80, "Extra 50+30=80, got " + c.extraAtk);
+  assert(c.atk === 557, "Lv99 Hunter ATK 557, got " + c.atk);
+  assert(Number.isInteger(c.atk) && Number.isInteger(c.minAtk) && Number.isInteger(c.maxAtk), "Lv99 ATK integers, no float leak");
+
+  const large = STATS.computeBowAtk(Object.assign({}, cOpts, { size: "L" }));
+  assert(large.atk === 504, "same piece vs Large ATK 504, got " + large.atk);
+
+  const vmin = STATS.computeBowAtk(Object.assign({}, cOpts, { variance: "min" }));
+  const vmax = STATS.computeBowAtk(Object.assign({}, cOpts, { variance: "max" }));
+  assert(c.minAtk === 539 && c.maxAtk === 576, "variance range 539–576 via mid packet, got " + c.minAtk + "-" + c.maxAtk);
+  assert(vmin.atk === 539 && vmax.atk === 576, "min/max variance 539/576, got " + vmin.atk + "/" + vmax.atk);
+
+  const tgt = dummy({ hardDef: 200, softDef: 103, def: 103 });
+  const defDmg = COMBAT.applyBowDefense(557, tgt, { crit: false });
+  assert(defDmg === 286, "ATK 557 vs Hard200 Soft103 → 286, got " + defDmg);
+  const hf = STATS.hardFactor(200);
+  assert(almost(hf, 0.7), "hardFactor 200 is 0.7");
+  assert(Math.floor(557 * hf) === 389, "floor(557*0.7)=389");
+
+  assert(almost(STATS.doubleStrafeMod(1), 2), "DS1 mod 2.00, got " + STATS.doubleStrafeMod(1));
+  assert(almost(STATS.doubleStrafeMod(10), 3.8), "DS10 mod 3.80, got " + STATS.doubleStrafeMod(10));
+  assert(almost(STATS.arrowShowerMod(1), 1.6), "AS1 mod 1.60, got " + STATS.arrowShowerMod(1));
+  assert(almost(STATS.arrowShowerMod(10), 2.5), "AS10 mod 2.50, got " + STATS.arrowShowerMod(10));
+  assert(STATS.arrowShowerAoe(1) === 3 && STATS.arrowShowerAoe(5) === 3, "AS AoE 3x3 at Lv1–5");
+  assert(STATS.arrowShowerAoe(6) === 5 && STATS.arrowShowerAoe(10) === 5, "AS AoE 5x5 at Lv6–10");
+  assert(almost(STATS.arrowRepelMod(1), 1.5), "Arrow Repel 150%");
+
+  const ds10raw = COMBAT.bowRaw(557, { skillMod: STATS.doubleStrafeMod(10) });
+  const ds10 = COMBAT.applyBowDefense(ds10raw, tgt);
+  assert(ds10raw === 2116, "DS10 Raw 2116, got " + ds10raw);
+  assert(ds10 === 1378, "DS10 after DEF 1378, got " + ds10);
+
+  const as10raw = COMBAT.bowRaw(557, { skillMod: STATS.arrowShowerMod(10) });
+  const as10 = COMBAT.applyBowDefense(as10raw, tgt);
+  assert(as10raw === 1392, "AS10 Raw 1392, got " + as10raw);
+  assert(as10 === 871, "AS10 after DEF 871, got " + as10);
+
+  const ds1raw = COMBAT.bowRaw(557, { skillMod: STATS.doubleStrafeMod(1) });
+  const ds1 = COMBAT.applyBowDefense(ds1raw, tgt);
+  assert(ds1raw === 1114, "DS1 Raw 1114, got " + ds1raw);
+  assert(ds1 === 676, "DS1 after DEF 676, got " + ds1);
+
+  const rpraw = COMBAT.bowRaw(557, { skillMod: STATS.arrowRepelMod(1) });
+  const rp = COMBAT.applyBowDefense(rpraw, tgt);
+  assert(rpraw === 835, "Arrow Repel Raw 835, got " + rpraw);
+  assert(rp === 481, "Arrow Repel after DEF 481, got " + rp);
+
+  assert(STATS.owlEyeDex(5) === 5, "Owl 5 → +5 DEX helper");
+  const owlOpts = { level: 99, str: 20, dex: 99, luk: 20, baseWeaponAtk: 125, weaponLevel: 3, refine: 5, arrowAtk: 30, equipAtk: 50, variance: "mid" };
+  owlOpts.dex += STATS.owlEyeDex(5);
+  assert(owlOpts.dex === 104, "Owl 5 added to opts.dex → 104, got " + owlOpts.dex);
+  const owlAtk = STATS.computeBowAtk(owlOpts);
+  assert(owlAtk.statusAtk === 138, "Owl 5 feeds StatusATK 133+5=138, got " + owlAtk.statusAtk);
+  assert(Number.isInteger(owlAtk.atk), "owl ATK integer");
+
+  assert(STATS.arrowAtkFrom({}) === 0, "arrowAtkFrom empty is 0 (no invented Arrow25)");
+  assert(STATS.hasBowAmmo({}) === false, "hasBowAmmo empty is false");
+  assert(STATS.hasBowAmmo({ arrowCount: 3 }) === true, "hasBowAmmo count>0");
+  assert(STATS.arrowAtkFrom({ ammo: { arrowAtk: 25 } }) === 25, "arrowAtkFrom reads ammo.arrowAtk");
+
+  const gateNoArrow = COMBAT.bowSkillGate({ equip: { weapon: "weapon_bow" } });
+  assert(!gateNoArrow.ok && gateNoArrow.reason === "no-arrow", "no arrow → cannot shoot, got " + JSON.stringify(gateNoArrow));
+  const gateNoBow = COMBAT.bowSkillGate({ equip: {} });
+  assert(!gateNoBow.ok && gateNoBow.reason === "no-bow", "no bow → combat refuses, got " + JSON.stringify(gateNoBow));
+  const gateOk = COMBAT.bowSkillGate({ equip: { weapon: "weapon_bow" }, arrowCount: 1 });
+  assert(gateOk.ok, "bow + ammo count gates ok");
+  const gateOpt = COMBAT.bowSkillGate({ weaponClass: "bow" }, { arrowAtk: 25 });
+  assert(gateOpt.ok, "opts.arrowAtk counts as ammo for tests");
+
+  const h = PVE.createSave("hunter", DATA.emptyAllocated());
+  h.owned.weapon_bow = true;
+  h.owned.shield_wood = true;
+  const eqBow = PVE.equipItem(h, "weapon", "weapon_bow");
+  assert(eqBow.ok && h.equip.weapon === "weapon_bow", "equip bow ok");
+  const eqShield = PVE.equipItem(h, "shield", "shield_wood");
+  assert(!eqShield.ok, "shield rejected while bow on, reason " + (eqShield && eqShield.reason));
+  assert(!h.equip.shield, "shield slot stays empty");
+
+  const h2 = PVE.createSave("hunter", DATA.emptyAllocated());
+  h2.owned.weapon_bow = true;
+  h2.owned.shield_wood = true;
+  const shFirst = PVE.equipItem(h2, "shield", "shield_wood");
+  assert(shFirst.ok && h2.equip.shield === "shield_wood", "shield alone ok");
+  const bowAfter = PVE.equipItem(h2, "weapon", "weapon_bow");
+  assert(!bowAfter.ok, "bow rejected while shield on");
+  assert(h2.equip.weapon == null, "weapon slot stays empty");
+
+  assert(DATA.ITEMS.weapon_bow.weaponAtk === 60 && DATA.ITEMS.weapon_oakbow.weaponAtk === 100 && DATA.ITEMS.weapon_hawk.weaponAtk === 150, "shop bow ATK unchanged");
+  assert(DATA.ITEMS.weapon_bow.twoHand === true && DATA.ITEMS.weapon_bow.weaponLevel === 1, "bows twoHand + WLv1");
+  assert(!DATA.ITEMS.weapon_hunter && !DATA.ITEMS.hunter_bow, "no invented Hunter Bow 125 item");
+  assert(!!DATA.SKILLS.double_strafe && !!DATA.SKILLS.arrow_shower && !!DATA.SKILLS.arrow_repel, "new skill ids in DATA.SKILLS");
+  assert(!!DATA.SKILLS.owl_eye && !!DATA.SKILLS.vulture_eye && !!DATA.SKILLS.improve_concentration, "passives in DATA.SKILLS");
+  assert(DATA.SKILLS.arrowshot && DATA.HEROES.hunter.skills.indexOf("arrowshot") >= 0, "old hunter skills kept");
+  assert(DATA.HEROES.hunter.skills.indexOf("double_strafe") >= 0, "new ids on HEROES.hunter.skills");
+  const treeIds = DATA.SKILL_TREES.hunter.map(function (n) { return n.id; });
+  ["arrowshot", "double_strafe", "arrow_shower", "arrow_repel", "owl_eye", "vulture_eye", "improve_concentration"].forEach(function (id) {
+    assert(treeIds.indexOf(id) >= 0, "tree has " + id);
+  });
+
+  const kb = { x: 10, y: 10 };
+  const delta = COMBAT.knockbackTiles(kb, { x: 8, y: 10 }, 2);
+  assert(delta.dx === 2 && delta.dy === 0 && kb.x === 12, "knockback 2 tiles away, got " + delta.dx + "," + delta.dy + " pos " + kb.x);
+  const blocked = COMBAT.knockbackTiles({ x: 5, y: 5 }, { x: 4, y: 5 }, 6, function (x) { return x <= 7; });
+  assert(blocked.dx === 2, "knockback stops when unwalkable, dx " + blocked.dx);
+  assert(typeof WORLD.knockback === "function", "WORLD.knockback exists");
+
+  const hd = STATS.computeHeroStats("hunter", DATA.emptyAllocated(), DATA.emptyEquip(), 1);
+  hd.skillRanks = { double_strafe: 10 };
+  hd.skills = ["double_strafe"];
+  const hero = COMBAT.createUnit(hd, "left");
+  hero.mp = 200;
+  const bd = STATS.computeBossStats(DATA.BOSSES[0]);
+  const boss = COMBAT.createUnit(bd, "right");
+  const st = COMBAT.createState(hero, boss, { seed: 1 });
+  const refused = COMBAT.heroSkill(st, hero, "double_strafe");
+  assert(!refused.ok && refused.reason === "no-bow", "DS without bow refused, got " + JSON.stringify(refused));
+
+  const eq = DATA.emptyEquip();
+  eq.weapon = "weapon_bow";
+  const bowed = STATS.computeHeroStats("hunter", DATA.emptyAllocated(), eq, 1, {}, { skillRanks: { owl_eye: 5 }, arrowAtk: 25 });
+  assert(bowed.bowAtk && bowed.bowAtk.ok, "computeHeroStats bow sets bowAtk");
+  assert(bowed.owlDex === 5, "Owl 5 on computeHeroStats extra, got " + bowed.owlDex);
+  assert(typeof bowed.atk === "number", "legacy atk still present");
+  assert(DATA.ITEMS.weapon_bow.weaponAtk === 60, "weapon_bow ATK still 60");
+
+  assert(almost(STATS.improveConcentrationPct(1), 0.03), "Conc Lv1 +3%");
+  assert(STATS.improveConcentrationDuration(1) === 60, "Conc Lv1 60s");
+  assert(almost(STATS.improveConcentrationPct(10), 0.12) && STATS.improveConcentrationDuration(10) === 240, "Conc Lv10 +12% / 240s");
+}
+
+console.log("arrow catalog v1");
+{
+  assert(DATA.ITEMS.arrow.arrowAtk === 25, "arrow.arrowAtk 25, got " + DATA.ITEMS.arrow.arrowAtk);
+  assert(DATA.ITEMS.arrow_steel.arrowAtk === 40, "arrow_steel.arrowAtk 40, got " + DATA.ITEMS.arrow_steel.arrowAtk);
+  assert(DATA.ITEMS.arrow_oridecon.arrowAtk === 50, "arrow_oridecon.arrowAtk 50, got " + DATA.ITEMS.arrow_oridecon.arrowAtk);
+  ["arrow", "arrow_steel", "arrow_oridecon"].forEach(function (id) {
+    const it = DATA.ITEMS[id];
+    assert(it.type === "ammo" && it.element === "none" && it.stack === true, id + " shape ammo/none/stack");
+    assert(it.jobs === DATA.JOB_BOW, id + " jobs JOB_BOW");
+    assert(it.arrowAtk > 0, id + " arrowAtk not 0");
+    assert(DATA.itemWeight(id) === 1, id + " weight 1g, got " + DATA.itemWeight(id));
+  });
+  assert(DATA.ITEMS.arrow.reqLevel === 1 && DATA.ITEMS.arrow.price === 1 && DATA.ITEMS.arrow.name === "ลูกธนู", "arrow name/lv/price");
+  assert(DATA.ITEMS.arrow_steel.reqLevel === 12 && DATA.ITEMS.arrow_steel.price === 4, "steel lv/price");
+  assert(DATA.ITEMS.arrow_oridecon.reqLevel === 32 && DATA.ITEMS.arrow_oridecon.price === 10, "oridecon lv/price");
+  assert(DATA.ITEMS.weapon_bow.weaponAtk === 60 && DATA.ITEMS.weapon_oakbow.weaponAtk === 100 && DATA.ITEMS.weapon_hawk.weaponAtk === 150, "bows still 60/100/150");
+  assert(DATA.ITEMS.weapon_bow.twoHand === true && DATA.ITEMS.weapon_oakbow.twoHand === true && DATA.ITEMS.weapon_hawk.twoHand === true, "bows twoHand");
+  assert(DATA.ITEMS.weapon_bow.weaponLevel === 1 && DATA.ITEMS.weapon_oakbow.weaponLevel === 1 && DATA.ITEMS.weapon_hawk.weaponLevel === 1, "bows WLv1");
+  assert(!DATA.ITEMS.weapon_hunter && !DATA.ITEMS.hunter_bow, "no Hunter Bow 125");
+  const ammoIds = Object.keys(DATA.ITEMS).filter(function (id) { return DATA.ITEMS[id].type === "ammo"; });
+  assert(ammoIds.length === 3, "no extra arrow ids, got " + ammoIds.join(","));
+  assert(!DATA.ITEMS.arrow_fire && !DATA.ITEMS.arrow_silver && !DATA.ITEMS.arrow_holy, "no element arrows");
+
+  const hunter = PVE.createSave("hunter", DATA.emptyAllocated());
+  assert(hunter.ammo && hunter.ammo.id === "arrow" && hunter.ammo.count === 100, "hunter createSave ammo 100, got " + JSON.stringify(hunter.ammo));
+  assert(hunter.arrowCount === 100, "hunter arrowCount 100");
+  assert(STATS.arrowAtkFrom(hunter) === 25, "hunter start arrowAtkFrom 25, got " + STATS.arrowAtkFrom(hunter));
+  assert(STATS.arrowCountFrom(hunter) === 100, "hunter start arrowCountFrom 100");
+  assert(STATS.hasBowAmmo(hunter) === true, "hunter start hasBowAmmo true");
+
+  const warrior = PVE.createSave("warrior", DATA.emptyAllocated());
+  assert(STATS.hasBowAmmo(warrior) === false, "warrior createSave hasBowAmmo false");
+  assert(STATS.arrowAtkFrom(warrior) === 0, "warrior arrowAtkFrom 0, got " + STATS.arrowAtkFrom(warrior));
+
+  hunter.owned.weapon_bow = true;
+  const eq = PVE.equipItem(hunter, "weapon", "weapon_bow");
+  assert(eq.ok, "hunter equip weapon_bow");
+  const der = PVE.derived(hunter);
+  assert(der.bowAtk && der.bowAtk.ok, "derived bowAtk ok");
+  assert(der.bowAtk.extraAtk === 25, "hunter start + weapon_bow ExtraATK 25, got " + der.bowAtk.extraAtk);
+  const mid = STATS.computeBowAtk({
+    weapon: "weapon_bow",
+    level: hunter.level || 1,
+    str: 0,
+    dex: 0,
+    luk: 0,
+    arrowAtk: STATS.arrowAtkFrom(hunter),
+    variance: "mid",
+    size: "M",
+  });
+  assert(mid.ok && mid.extraAtk === 25, "computeBowAtk mid Medium ExtraATK 25, got " + mid.extraAtk);
+
+  const spent = PVE.createSave("hunter", DATA.emptyAllocated());
+  spent.ammo.count = 7;
+  spent.arrowCount = 7;
+  PVE.ensureProgress(spent);
+  assert(spent.ammo.count === 7 && spent.arrowCount === 7, "ensureProgress does not refill spent arrows");
+  const missing = { heroId: "hunter", allocated: DATA.emptyAllocated(), equip: DATA.emptyEquip() };
+  PVE.ensureProgress(missing);
+  assert(missing.ammo && missing.ammo.id === "arrow" && missing.ammo.count === 100, "ensureProgress fills missing hunter ammo to 100");
+
+  const buyH = PVE.createSave("hunter", DATA.emptyAllocated());
+  const z0 = buyH.zeno;
+  const b1 = PVE.buyAmmo(buyH, "arrow", 1);
+  assert(b1.ok && buyH.zeno === z0 - 1 && buyH.ammo.count === 101, "buyAmmo 1 costs 1 count 101, zeno " + buyH.zeno + " count " + buyH.ammo.count);
+  const z1 = buyH.zeno;
+  const b100 = PVE.buyAmmo(buyH, "arrow", 100);
+  assert(b100.ok && buyH.zeno === z1 - 100 && buyH.ammo.count === 201, "pack 100 costs 100 count +=100, zeno " + buyH.zeno + " count " + buyH.ammo.count);
+
+  const notArch = PVE.createSave("warrior", DATA.emptyAllocated());
+  const zW = notArch.zeno;
+  const denyJob = PVE.buyAmmo(notArch, "arrow", 1);
+  assert(!denyJob.ok && notArch.zeno === zW, "cannot buy if not archer");
+
+  const poor = PVE.createSave("hunter", DATA.emptyAllocated());
+  poor.zeno = 0;
+  const cPoor = poor.ammo.count;
+  const denyZ = PVE.buyAmmo(poor, "arrow", 1);
+  assert(!denyZ.ok && poor.zeno === 0 && poor.ammo.count === cPoor, "cannot buy if zeno short");
+
+  const fat = PVE.createSave("hunter", DATA.emptyAllocated());
+  fat.zeno = 10000;
+  fat.potions.red = 30;
+  const zF = fat.zeno;
+  const cF = fat.ammo.count;
+  const denyW = PVE.buyAmmo(fat, "arrow", 1);
+  assert(!denyW.ok && denyW.reason === "น้ำหนักเต็ม แบกไม่ไหว", "cannot buy if overweight, reason " + (denyW && denyW.reason));
+  assert(fat.zeno === zF && fat.ammo.count === cF, "overweight buyAmmo leaves zeno/count");
+
+  const lvGate = PVE.createSave("hunter", DATA.emptyAllocated());
+  const denyLv = PVE.buyAmmo(lvGate, "arrow_steel", 1);
+  assert(!denyLv.ok, "lv1 cannot buy steel req 12");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

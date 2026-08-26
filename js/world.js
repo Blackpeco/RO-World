@@ -4,6 +4,7 @@
  */
 (function (root) {
   const DATA = root.DATA;
+  const STATS = root.STATS;
   const COMBAT = root.COMBAT;
   const PVE = root.PVE;
   const WORLD = {};
@@ -115,12 +116,21 @@
   function skillRange(ent, skillId) {
     const def = skillDef(ent, skillId);
     if (!def || def.type === "self") return 99;
-    if (ent && ent.unit && ent.unit.heroId === "hunter") return WORLD.HUNTER_RANGE;
+    if (ent && ent.unit && ent.unit.heroId === "hunter") {
+      const extra = (STATS && STATS.vultureEyeRange) ? STATS.vultureEyeRange(ent.unit.skillRanks && ent.unit.skillRanks.vulture_eye) : 0;
+      return WORLD.HUNTER_RANGE + extra;
+    }
     if (ent && ent.unit && ent.unit.heroId === "warrior") return WORLD.WARRIOR_RANGE;
     return 1;
   }
 
   WORLD.skillRange = skillRange;
+
+  WORLD.knockback = function (ent, from, tiles) {
+    return COMBAT.knockbackTiles(ent, from, tiles, function (x, y) {
+      return isWalkable(x, y);
+    });
+  };
 
   function inSkillRange(ent, foe, skillId) {
     if (!ent || !foe || foe.dead) return false;
@@ -153,6 +163,7 @@
         atk.unit.side = keepA;
         defn.unit.side = keepD;
       },
+      save: S && S.save,
     };
     return state;
   }
@@ -203,6 +214,7 @@
     if (!S || !S.save || !S.player) return;
     S.save.hp = S.player.unit.hp;
     S.save.mp = S.player.unit.mp;
+    if (root.PVE && PVE.syncAmmoFromUnit) PVE.syncAmmoFromUnit(S.save, S.player.unit);
   }
 
   function onDeath(victim, killer) {
@@ -307,6 +319,11 @@
     if (!def) return false;
     if (!COMBAT.skillReady(atk.unit, skillId, def)) return false;
     if (!inSkillRange(atk, defn, skillId)) return false;
+    const bowSkill = def.bowSkill || skillId === "double_strafe" || skillId === "arrow_shower" || skillId === "arrow_repel";
+    if (bowSkill && STATS.holdsBow(atk.unit) && !COMBAT.hasBowAmmoForCombat(atk.unit, S && S.save)) {
+      if (atk.kind === "player") toast("ไม่มีลูกธนู");
+      return false;
+    }
     atk.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(defn.x - atk.x, defn.y - atk.y) : "s";
     if (atk.unit) atk.unit.facing = atk.facing;
     if (atk.kind === "player" && S.save) S.save.facing = atk.facing;
@@ -441,6 +458,36 @@
     if (!sid) return;
     if (!inSkillRange(ent, foe, sid)) return;
     if (ent.kind !== "player" && !ent.aggro && chebyshev(ent, foe) > 1) return;
+    if (ent.kind === "player" && STATS.holdsBow(ent.unit)) {
+      if (!COMBAT.hasBowAmmoForCombat(ent.unit, S && S.save)) {
+        toast("ไม่มีลูกธนู");
+        return;
+      }
+      if (playerWeightOver()) {
+        toastWeightOverAtk();
+        return;
+      }
+      if (!inSkillRange(ent, foe, sid)) return;
+      ent.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(foe.x - ent.x, foe.y - ent.y) : "s";
+      if (ent.unit) ent.unit.facing = ent.facing;
+      if (S.save) S.save.facing = ent.facing;
+      const state = makePair(ent, foe);
+      COMBAT.emitFx(state, { kind: "act", side: ent.unit.side, skillId: "bow_attack", anim: "attack" });
+      COMBAT.doBowHit(state, ent.unit, foe.unit, "ยิงธนู", { variance: "mid" });
+      COMBAT.normalizeCdsToMs(ent.unit);
+      if (root.FX && FX.mapActor) FX.mapActor(S.hostEl, ent, foe, sid, skillDef(ent, sid));
+      flushFx(state, ent, foe);
+      if (state._restore) state._restore();
+      ent.atkReadyAt = nowMs() + COMBAT.attackIntervalMs(ent.unit);
+      if (foe.kind !== "player") foe.aggro = true;
+      S.targetId = foe.id;
+      if (foe.unit.hp <= 0) onDeath(foe, ent);
+      if (!S || S.ending) return;
+      if (ent.unit.hp <= 0) onDeath(ent, foe);
+      if (!S || S.ending) return;
+      syncPlayerSave();
+      return;
+    }
     executeOn(ent, foe, sid);
   }
 
@@ -629,12 +676,9 @@
       return;
     }
     if (p.sitting) setPlayerSitting(false);
-    let tgt = WORLD.targetEntity();
-    if (!tgt || tgt.dead) {
-      tgt = nearestLiving(p, "mob");
-      if (tgt) WORLD.setTarget(tgt.id);
-    }
+    const tgt = WORLD.pickFarmTarget(p);
     if (!tgt) return;
+    if (WORLD.targetEntity() !== tgt) WORLD.setTarget(tgt.id);
     const sid = basicSkillOf(p);
     if (sid && inSkillRange(p, tgt, sid)) {
       if (MAP && MAP.stopWalking) MAP.stopWalking();
@@ -677,6 +721,35 @@
     });
     return best;
   }
+
+  WORLD.pickFarmTarget = function (player, ents) {
+    if (!player) return null;
+    const list = ents || (S && S.entities) || [];
+    let best = null;
+    let bestCost = Infinity;
+    let bestCheb = Infinity;
+    let bestManh = Infinity;
+    let i;
+    for (i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (!e || e.dead || e.kind !== "mob") continue;
+      const cost = MAP && MAP.adjacentWalkCost ? MAP.adjacentWalkCost(player, e) : -1;
+      if (cost < 0 || !isFinite(cost)) continue;
+      const ch = chebyshev(player, e);
+      const mh = manh(player, e);
+      if (
+        cost < bestCost ||
+        (cost === bestCost && ch < bestCheb) ||
+        (cost === bestCost && ch === bestCheb && mh < bestManh)
+      ) {
+        best = e;
+        bestCost = cost;
+        bestCheb = ch;
+        bestManh = mh;
+      }
+    }
+    return best;
+  };
 
   function tickArenaAi() {
     if (!S || S.mode !== "arena" || S.localBoth) return;
@@ -777,6 +850,7 @@
   function makeMob(monsterId, x, y, uid) {
     const unit = PVE.buildMonsterUnit(monsterId);
     unit.side = "right";
+    unit.facing = "s";
     return {
       id: uid,
       kind: "mob",
@@ -786,6 +860,7 @@
       spawnY: y,
       unit: unit,
       monsterId: monsterId,
+      facing: "s",
       atkReadyAt: nowMs() + 250,
       moveReadyAt: 0,
       aggro: false,
@@ -885,19 +960,36 @@
       }
       const art = el.querySelector(".ent-art");
       const u = e.unit;
-      const src = (root.FX && FX.spriteSrc && FX.spriteSrc(u.heroId, u)) || u.sprite || u.portrait || "";
+      if (u) u.facing = e.facing || u.facing || "s";
+      const src = (root.FX && FX.spriteSrc && FX.spriteSrc(u.heroId || e.monsterId, u)) || u.sprite || u.portrait || "";
       const tint = (u.isMonster && src.indexOf("monster_sprite") !== -1)
         ? " tint-" + (e.monsterId || "poring")
         : "";
       const size = e.kind === "boss" ? " tall" : u.isMonster ? " mob" : "";
-      const img = art.querySelector("img.map-sprite");
+      let img = art.querySelector("img.map-sprite");
       if (src) {
-        if (!img || img.getAttribute("src") !== src) {
-          art.innerHTML = '<img class="map-sprite' + tint + size + '" src="' + src + '" alt="">';
-        } else {
-          img.className = "map-sprite" + tint + size;
+        if (!img) {
+          img = document.createElement("img");
+          img.alt = "";
+          img._mobOnErr = true;
+          img.onerror = function () {
+            const oldSrc = img.getAttribute("src") || "";
+            if (!/_(n|ne|e|se|s)\.png$/.test(oldSrc)) return;
+            if (root.FX && FX.noteMob404) FX.noteMob404(oldSrc);
+            const mid = e.monsterId || (u && (u.monsterId || u.heroId)) || "poring";
+            const still = (root.FX && FX.mobStillSrc)
+              ? FX.mobStillSrc(mid, u)
+              : ((u && u.sprite) || ("assets/mobs/" + mid + ".png"));
+            if (still && img.getAttribute("src") !== still) img.src = still;
+          };
+          art.innerHTML = "";
+          art.appendChild(img);
         }
-        if (root.FX && FX.applyFacing) FX.applyFacing(el, e.facing || (u && u.facing) || "s");
+        img.className = "map-sprite" + tint + size;
+        if (img.getAttribute("src") !== src) img.src = src;
+        if (root.FX && FX.applyFacing) {
+          FX.applyFacing(el, e.facing || (u && u.facing) || "s", { isMonster: !!(u && u.isMonster) });
+        }
       } else if (!art.querySelector(".ent-emo")) {
         art.innerHTML = '<span class="ent-emo">' + (u.emoji || "") + "</span>";
       }

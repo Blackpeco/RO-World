@@ -1541,6 +1541,32 @@
         ">ซื้อ " + it.price + " · " + DATA.itemWeight(it) + "g</button></div></div>"
       );
     }).join("");
+    const ammoIds = DATA.AMMO_ORDER || [];
+    const ammoRows = ammoIds.map(function (id) {
+      const it = DATA.ITEMS && DATA.ITEMS[id];
+      if (!it) return "";
+      const have = (save.ammo && save.ammo.id === id) ? STATS.arrowCountFrom(save) : 0;
+      const w1 = DATA.itemWeight(it);
+      const packPrice = (it.price || 0) * 100;
+      const canJob = PVE.isBowHero && PVE.isBowHero(save.heroId);
+      const lv = save.baseLevel || save.level || 1;
+      const canLv = !it.reqLevel || lv >= it.reqLevel;
+      const can1 = canJob && canLv && save.zeno >= it.price && PVE.canCarry(save, w1);
+      const can100 = canJob && canLv && save.zeno >= packPrice && PVE.canCarry(save, w1 * 100);
+      return (
+        '<div class="item-row"><div><b>🏹 ' + it.name +
+        '</b><div class="item-bon">Arrow ATK ' + (it.arrowAtk || 0) +
+        " · " + w1 + "g · มี " + have +
+        '</div></div><div class="item-buy">' +
+        '<button type="button" class="btn small ' + (can1 ? "gold" : "disabled") + '" ' +
+        (can1 ? 'onclick="App.buyAmmo(\'' + id + "',1)\"" : "disabled") +
+        ">ลูกธนู 1 · " + it.price + "</button>" +
+        '<button type="button" class="btn small ' + (can100 ? "gold" : "disabled") + '" ' +
+        (can100 ? 'onclick="App.buyAmmo(\'' + id + "',100)\"" : "disabled") +
+        ">แพ็ก 100 · " + packPrice + "</button>" +
+        "</div></div>"
+      );
+    }).join("");
     const nav = opts.overlay
       ? '<button type="button" class="btn ghost wide" onclick="App.closeCityWin()">ปิด</button>'
       : '<button type="button" class="btn gold wide" onclick="App.goWorld()">กลับเมือง</button>';
@@ -1548,7 +1574,7 @@
       (opts.overlay ? "" : " <h2>ร้านยา พรอนเทรา</h2>") +
       '<div class="zeno-chip">เงินคงเหลือ <b>' + save.zeno + "</b> Zeno</div>" +
       '<p class="hint">ยาซ้อนจำนวนได้ · ใช้จากกระเป๋าบน HUD · Auto Farm จะดื่มยาแดง/ส้มเมื่อ HP ต่ำกว่า 40%</p>' +
-      '<div class="item-list">' + rows + "</div>" +
+      '<div class="item-list">' + rows + ammoRows + "</div>" +
       nav;
     if (opts.overlay) return inner;
     UI.setWalkMode(false);
@@ -1802,6 +1828,19 @@
           "</button>"
         );
       }).join("");
+      if (PVE.isBowHero && PVE.isBowHero(save.heroId)) {
+        const ammoId = save.ammo && save.ammo.id;
+        const it = ammoId && DATA.ITEMS[ammoId];
+        const n = STATS.arrowCountFrom(save);
+        const atk = STATS.arrowAtkFrom(save);
+        const name = (it && it.name) || "ลูกธนู";
+        grid =
+          '<div class="ro-slot inv-slot' + (n ? "" : " empty") + '">' +
+          '<span class="inv-emoji">🏹</span>' +
+          "<b>" + UI.esc(name) + "</b>" +
+          "<small>×" + n + (atk ? " · ATK " + atk : "") + "</small></div>" +
+          grid;
+      }
     } else if (tab === "equip") {
       var ownedIds = Object.keys(DATA.ITEMS).filter(function (id) { return save.owned && save.owned[id]; });
       if (!ownedIds.length) {

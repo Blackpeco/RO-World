@@ -1112,26 +1112,17 @@ textarea {
     radial-gradient(circle at 45% 75%, #4aaa4a 0 3px, transparent 3.4px);
 }
 .map-grid.theme-city .map-tile.npc {
-  box-shadow: 0 0 10px rgba(255, 210, 140, 0.45);
+  box-shadow: none;
 }
 .map-grid.theme-city .map-tile.shop-weapon,
 .map-grid.theme-city .map-tile.shop-potion,
+.map-grid.theme-city .map-tile.shop-kafra,
 .map-grid.theme-city .map-tile.keep-gate,
 .map-grid.theme-city .map-tile.gate {
-  background-color: #c4b49a;
-  background-image:
-    linear-gradient(180deg, rgba(216, 200, 176, 0.4), rgba(196, 180, 154, 0.25)),
-    url("../assets/tiles/city_ground.png");
-  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
-  background-repeat: no-repeat, repeat;
-}
-.map-grid.theme-city .map-tile.shop-kafra {
-  background-color: #f6e6d0;
-  background-image:
-    linear-gradient(180deg, rgba(248, 236, 216, 0.35), rgba(246, 230, 208, 0.2)),
-    url("../assets/tiles/city_plaza.png");
-  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
-  background-repeat: no-repeat, repeat;
+  background: none;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
 }
 .map-grid.theme-city .map-tile.keep-gate::before,
 .map-grid.theme-city .map-tile.gate::before {
@@ -1196,6 +1187,98 @@ textarea {
   object-position: center bottom;
   pointer-events: none;
   filter: drop-shadow(4px 7px 8px rgba(40, 28, 16, 0.34));
+}
+.city-prop.kind-warp {
+  width: calc(var(--prop-w, 3) * 100% / var(--cols, 45));
+  height: calc(var(--prop-h, 3) * 100% / var(--rows, 33));
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  isolation: isolate;
+}
+.city-prop.kind-warp .warp-ripple,
+.warp-ripple {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.warp-ripple::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28%;
+  height: 28%;
+  margin: -14% 0 0 -14%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 236, 160, 0.55) 0%, rgba(140, 220, 255, 0.18) 60%, transparent 72%);
+  box-shadow: 0 0 12px rgba(255, 214, 110, 0.7);
+}
+.warp-ripple i {
+  display: block;
+  box-sizing: border-box;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: transparent;
+  animation: warpPulse 1.8s ease-in-out infinite;
+}
+.warp-ripple i:nth-child(1) {
+  width: 36%;
+  height: 36%;
+  margin: -18% 0 0 -18%;
+  border: 5px solid rgba(255, 226, 110, 1);
+  box-shadow: 0 0 8px rgba(255, 210, 80, 0.95);
+}
+.warp-ripple i:nth-child(2) {
+  width: 62%;
+  height: 62%;
+  margin: -31% 0 0 -31%;
+  border: 5px solid rgba(90, 220, 255, 1);
+  box-shadow: 0 0 8px rgba(80, 210, 255, 0.9);
+  animation-delay: 0.3s;
+}
+.warp-ripple i:nth-child(3) {
+  width: 88%;
+  height: 88%;
+  margin: -44% 0 0 -44%;
+  border: 5px solid rgba(255, 214, 100, 1);
+  box-shadow: 0 0 10px rgba(255, 200, 70, 0.85);
+  animation-delay: 0.6s;
+}
+@keyframes warpPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.68; }
+}
+.city-prop.kind-npc {
+  pointer-events: auto;
+  cursor: pointer;
+  transform-origin: 50% 90%;
+  z-index: 30;
+}
+.city-prop.kind-npc img,
+.city-prop.kind-npc .map-sprite.npc {
+  height: 510%;
+  width: auto;
+  max-width: 240%;
+  object-position: center bottom;
+  transform-origin: 50% 90%;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.city-prop.kind-npc .npc-chip {
+  position: absolute;
+  left: 50%;
+  bottom: 520%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #fff6d2;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
 }
 .city-prop.kind-tree img {
   width: auto;
@@ -1280,12 +1363,24 @@ textarea {
   filter: saturate(0.85);
 }
 .map-grid.theme-field .map-tile.gate {
-  background-image:
-    radial-gradient(circle at 50% 40%, rgba(220, 200, 140, 0.28), rgba(50, 40, 24, 0.12)),
-    url("../assets/tiles/path.png");
-  background-size: 100% 100%, calc(100% / 9) calc(100% / 9);
-  background-repeat: no-repeat, repeat;
-  box-shadow: 0 0 10px rgba(150, 190, 130, 0.32);
+  background: none;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+.map-grid.theme-city .map-tile.warp,
+.map-grid.theme-field .map-tile.warp {
+  background: none;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+.city-prop.kind-gate img {
+  z-index: 0;
+}
+.city-prop.kind-warp {
+  isolation: isolate;
+  pointer-events: none;
 }
 
 .map-tile-art {
@@ -1390,7 +1485,9 @@ textarea {
 .map-grid.theme-field .map-tile.block,
 .map-grid.theme-field .map-tile.mob,
 .map-grid.theme-field .map-tile.mob-dead,
-.map-grid.theme-field .map-tile.gate {
+.map-grid.theme-field .map-tile.gate,
+.map-grid.theme-city .map-tile.warp,
+.map-grid.theme-field .map-tile.warp {
   background: none;
   background-image: none;
   background-color: transparent;
@@ -1669,6 +1766,14 @@ body.walking #screen {
   width: auto;
   object-fit: contain;
   object-position: center bottom;
+}
+.map-sprite.npc {
+  height: 510%;
+  max-width: 280%;
+  width: auto;
+  object-fit: contain;
+  object-position: center bottom;
+  transform-origin: 50% 90%;
 }
 
 @keyframes spriteBob {

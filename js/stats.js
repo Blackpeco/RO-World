@@ -294,6 +294,231 @@
     return (4000 + effectiveHard) / (4000 + effectiveHard * 10);
   };
 
+  /* ---------- locked Archer bow ATK (no CON / P.ATK) ---------- */
+  STATS.BOW_REFINE_ATK = { 1: 2, 2: 3, 3: 5, 4: 7 };
+  STATS.BOW_REFINE_SAFE = { 1: 7, 2: 6, 3: 5, 4: 4 };
+
+  STATS.bowRefineBonus = function (weaponLevel, plus) {
+    const wlv = Math.max(1, Math.min(4, Math.floor(Number(weaponLevel) || 1)));
+    const n = Math.max(0, Math.floor(Number(plus) || 0));
+    const per = STATS.BOW_REFINE_ATK[wlv] != null ? STATS.BOW_REFINE_ATK[wlv] : 2;
+    return n * per;
+  };
+
+  STATS.bowSizePenalty = function (size) {
+    const s = String(size == null ? "M" : size).toUpperCase();
+    if (s === "L" || s === "LARGE") return 0.75;
+    return 1;
+  };
+
+  STATS.bowVarianceAmp = function (weaponLevel, baseWeaponAtk) {
+    return 0.05 * (Number(weaponLevel) || 1) * (Number(baseWeaponAtk) || 0);
+  };
+
+  STATS.bowVariance = function (weaponLevel, baseWeaponAtk, mode) {
+    const amp = STATS.bowVarianceAmp(weaponLevel, baseWeaponAtk);
+    if (mode === "min") return -amp;
+    if (mode === "max") return amp;
+    if (mode === "mid" || mode == null || mode === "") return 0;
+    if (typeof mode === "number" && isFinite(mode)) return mode;
+    return 0;
+  };
+
+  STATS.statusAtk = function (lv, str, dex, luk) {
+    return Math.floor((Number(lv) || 0) / 4) + Math.floor((Number(str) || 0) / 5) + Math.floor(Number(dex) || 0) + Math.floor((Number(luk) || 0) / 3);
+  };
+
+  STATS.doubleStrafeMod = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return ((90 + 10 * lv) * 2) / 100;
+  };
+
+  STATS.arrowShowerMod = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return (150 + 10 * lv) / 100;
+  };
+
+  STATS.arrowShowerAoe = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return lv >= 6 ? 5 : 3;
+  };
+
+  STATS.inArrowShower = function (center, pos, lv) {
+    const half = Math.floor(STATS.arrowShowerAoe(lv) / 2);
+    return Math.abs((pos && pos.x) - (center && center.x)) <= half && Math.abs((pos && pos.y) - (center && center.y)) <= half;
+  };
+
+  STATS.arrowRepelMod = function (lv) {
+    return 1.5;
+  };
+
+  STATS.owlEyeDex = function (lv) {
+    return Math.max(0, Math.floor(Number(lv) || 0));
+  };
+
+  STATS.vultureEyeHit = function (lv) {
+    return Math.max(0, Math.floor(Number(lv) || 0));
+  };
+
+  STATS.vultureEyeRange = function (lv) {
+    return Math.max(0, Math.floor(Number(lv) || 0));
+  };
+
+  STATS.improveConcentrationPct = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return (2 + lv) / 100;
+  };
+
+  STATS.improveConcentrationDuration = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return 40 + 20 * lv;
+  };
+
+  STATS.weaponItem = function (equipOrId) {
+    if (!equipOrId) return null;
+    if (typeof equipOrId === "string") return (DATA.ITEMS && DATA.ITEMS[equipOrId]) || null;
+    const id = equipOrId.weapon || (equipOrId.equip && equipOrId.equip.weapon);
+    return (id && DATA.ITEMS && DATA.ITEMS[id]) || null;
+  };
+
+  STATS.holdsBow = function (unitOrSaveOrEquip) {
+    if (!unitOrSaveOrEquip) return false;
+    if (unitOrSaveOrEquip.weaponClass === "bow") return true;
+    if (unitOrSaveOrEquip.hasBow) return true;
+    const item = STATS.weaponItem(unitOrSaveOrEquip.equip || unitOrSaveOrEquip);
+    return !!(item && item.weaponClass === "bow");
+  };
+
+  STATS.arrowAtkFrom = function (unitOrSave) {
+    if (!unitOrSave) return 0;
+    if (unitOrSave.arrowAtk != null) return Number(unitOrSave.arrowAtk) || 0;
+    const ammo = unitOrSave.ammo;
+    if (ammo) {
+      if (ammo.arrowAtk != null) return Number(ammo.arrowAtk) || 0;
+      if (ammo.id && DATA.ITEMS && DATA.ITEMS[ammo.id] && DATA.ITEMS[ammo.id].arrowAtk != null) {
+        return Number(DATA.ITEMS[ammo.id].arrowAtk) || 0;
+      }
+      const ammoItem = ammo.item;
+      if (ammoItem && ammoItem.arrowAtk != null) return Number(ammoItem.arrowAtk) || 0;
+    }
+    const equip = unitOrSave.equip;
+    if (equip && equip.ammo && DATA.ITEMS && DATA.ITEMS[equip.ammo] && DATA.ITEMS[equip.ammo].arrowAtk != null) {
+      return Number(DATA.ITEMS[equip.ammo].arrowAtk) || 0;
+    }
+    if (unitOrSave.arrow && DATA.ITEMS && DATA.ITEMS[unitOrSave.arrow] && DATA.ITEMS[unitOrSave.arrow].arrowAtk != null) {
+      return Number(DATA.ITEMS[unitOrSave.arrow].arrowAtk) || 0;
+    }
+    return 0;
+  };
+
+  STATS.arrowCountFrom = function (unitOrSave) {
+    if (!unitOrSave) return 0;
+    if (unitOrSave.arrowCount != null) return Math.max(0, Math.floor(Number(unitOrSave.arrowCount) || 0));
+    const ammo = unitOrSave.ammo;
+    if (typeof ammo === "number") return Math.max(0, Math.floor(ammo));
+    if (ammo) {
+      if (ammo.count != null) return Math.max(0, Math.floor(Number(ammo.count) || 0));
+      if (ammo.qty != null) return Math.max(0, Math.floor(Number(ammo.qty) || 0));
+    }
+    if (unitOrSave.arrows != null && typeof unitOrSave.arrows !== "object") {
+      return Math.max(0, Math.floor(Number(unitOrSave.arrows) || 0));
+    }
+    if (unitOrSave.inventory && unitOrSave.inventory.arrow != null) {
+      return Math.max(0, Math.floor(Number(unitOrSave.inventory.arrow) || 0));
+    }
+    return 0;
+  };
+
+  STATS.hasBowAmmo = function (unitOrSave) {
+    return STATS.arrowCountFrom(unitOrSave) > 0;
+  };
+
+  STATS.computeBowAtk = function (opts) {
+    opts = opts || {};
+    function empty(reason) {
+      return {
+        ok: false,
+        reason: reason || "no-bow",
+        statusAtk: 0,
+        variance: 0,
+        statBonus: 0,
+        refineBonus: 0,
+        overUpgrade: 0,
+        weaponAtk: 0,
+        extraAtk: 0,
+        groupA: 0,
+        groupB: 0,
+        atk: 0,
+        minAtk: 0,
+        maxAtk: 0,
+      };
+    }
+    const item = opts.item || (opts.weapon && DATA.ITEMS && DATA.ITEMS[opts.weapon]) || null;
+    const inferredBow = opts.hasBow === true || opts.weaponClass === "bow" || !!(item && item.weaponClass === "bow");
+    const baseGiven = opts.baseWeaponAtk != null;
+    if (!inferredBow && !baseGiven) return empty("no-bow");
+
+    const baseWeapon = baseGiven ? Number(opts.baseWeaponAtk) || 0 : (item ? Number(item.weaponAtk) || 0 : 0);
+    const lv = Math.floor(Number(opts.level != null ? opts.level : opts.lv) || 1);
+    const str = Math.floor(Number(opts.str) || 0);
+    const dex = Math.floor(Number(opts.dex) || 0);
+    const luk = Math.floor(Number(opts.luk) || 0);
+    const wlv = Math.max(1, Math.floor(Number(opts.weaponLevel != null ? opts.weaponLevel : (item && item.weaponLevel)) || 1));
+    const plus = Math.max(0, Math.floor(Number(opts.refine != null ? opts.refine : opts.plus) || 0));
+    const size = opts.size || "M";
+    const element = opts.element != null ? Number(opts.element) : 1;
+    const equipAtk = Number(opts.equipAtk) || 0;
+    const consumableAtk = Number(opts.consumableAtk) || 0;
+    const arrowAtk = Number(opts.arrowAtk) || 0;
+    const pseudoBuffAtk = Number(opts.pseudoBuffAtk) || 0;
+    const atkPct = Number(opts.atkPct) || 0;
+    const race = Number(opts.race) || 0;
+    const sizeMod = Number(opts.sizeMod) || 0;
+    const property = Number(opts.property) || 0;
+    const classMod = Number(opts.classMod != null ? opts.classMod : 0);
+    const masteryAtk = Math.floor(Number(opts.masteryAtk) || 0);
+    const buffAtk = Math.floor(Number(opts.buffAtk) || 0);
+    const overUpgrade = Number(opts.overUpgrade) || 0;
+    const sizePen = STATS.bowSizePenalty(size);
+    const statusAtk = STATS.statusAtk(lv, str, dex, luk);
+    const statBonus = baseWeapon * dex / 200;
+    const refineBonus = STATS.bowRefineBonus(wlv, plus);
+
+    function pack(varMode) {
+      const variance = STATS.bowVariance(wlv, baseWeapon, varMode);
+      const weaponAtk = Math.floor((baseWeapon + variance + statBonus + refineBonus + overUpgrade) * sizePen);
+      const extraAtk = equipAtk + consumableAtk + arrowAtk + pseudoBuffAtk;
+      let groupA = 0;
+      if (atkPct) groupA = Math.floor((weaponAtk + extraAtk) * atkPct);
+      let groupB;
+      if (!race && !sizeMod && !property && !classMod) groupB = weaponAtk + extraAtk;
+      else groupB = Math.floor((weaponAtk + extraAtk) * (1 + race) * (1 + sizeMod) * (1 + property) * (1 + classMod));
+      const atk = Math.floor(statusAtk * 2 + groupA + groupB * element) + masteryAtk + buffAtk;
+      return { variance: variance, weaponAtk: weaponAtk, extraAtk: extraAtk, groupA: groupA, groupB: groupB, atk: atk };
+    }
+
+    const mid = pack(opts.variance == null ? "mid" : opts.variance);
+    const lo = pack("min");
+    const hi = pack("max");
+    return {
+      ok: true,
+      statusAtk: statusAtk,
+      variance: mid.variance,
+      statBonus: statBonus,
+      refineBonus: refineBonus,
+      overUpgrade: overUpgrade,
+      weaponAtk: mid.weaponAtk,
+      extraAtk: mid.extraAtk,
+      groupA: mid.groupA,
+      groupB: mid.groupB,
+      atk: mid.atk,
+      minAtk: lo.atk,
+      maxAtk: hi.atk,
+      sizePenalty: sizePen,
+      weaponLevel: wlv,
+    };
+  };
+
   /**
    * Bonuses granted purely by allocated+equipment stat points (section 6).
    * STR: +1 ATK, bonus floor(STR/10)^2 ATK, +10 maxHP, +0.5 HP regen
@@ -358,13 +583,17 @@
    * @param {object} equip      slot -> itemId
    * @param {number} level
    */
-  STATS.computeHeroStats = function (heroId, allocated, equip, level, refine) {
+  STATS.computeHeroStats = function (heroId, allocated, equip, level, refine, extra) {
     const base = DATA.HEROES[heroId];
     if (!base) throw new Error("Unknown hero: " + heroId);
     allocated = allocated || DATA.emptyAllocated();
     equip = equip || DATA.emptyEquip();
     level = level || 1;
     refine = refine || {};
+    extra = extra || {};
+    const skillRanks = extra.skillRanks || extra.ranks || {};
+    const owlDex = STATS.owlEyeDex(skillRanks.owl_eye);
+    const vultureHit = STATS.vultureEyeHit(skillRanks.vulture_eye);
 
     const eqPts = STATS.equipmentStatPoints(equip);
     const totalPts = {};
@@ -410,7 +639,7 @@
       critMult: base.critMult + fromEq.critMult,
       dodge: base.dodge + fromPts.dodge + fromEq.dodge,
       accuracy: DATA.HERO_BASE_ACCURACY + fromPts.accuracy + fromEq.accuracy,
-      hit: STATS.playerHit(level, totalPts.dex || 0, totalPts.luk || 0, fromEq.hit || 0),
+      hit: STATS.playerHit(level, (totalPts.dex || 0) + owlDex, totalPts.luk || 0, fromEq.hit || 0) + vultureHit,
       flee: STATS.playerFlee(level, totalPts.agi || 0, totalPts.luk || 0, fromEq.flee || 0),
       perfectDodge: STATS.perfectDodge(totalPts.luk || 0, fromEq.perfectDodge || 0),
       hpRegen: base.hpRegen + fromPts.hpRegen + fromEq.hpRegen,
@@ -438,12 +667,39 @@
     stats.equip = equip;
     stats.maxWeight = DATA.maxWeight(totalPts.str || 0);
     stats.str = totalPts.str || 0;
+    stats.owlDex = owlDex;
+    stats.vultureHit = vultureHit;
+    stats.vultureRange = STATS.vultureEyeRange(skillRanks.vulture_eye);
+    stats.skillRanks = skillRanks;
+
+    const wepId = equip && equip.weapon;
+    const wep = wepId && DATA.ITEMS[wepId];
+    stats.weaponClass = wep && wep.weaponClass;
+    stats.twoHand = !!(wep && (wep.twoHand || wep.weaponClass === "bow"));
+    if (wep && wep.weaponClass === "bow") {
+      const bowDex = (totalPts.dex || 0) + owlDex;
+      const bow = STATS.computeBowAtk({
+        hasBow: true,
+        level: level,
+        str: totalPts.str || 0,
+        dex: bowDex,
+        luk: totalPts.luk || 0,
+        baseWeaponAtk: Number(wep.weaponAtk) || 0,
+        weaponLevel: wep.weaponLevel || 1,
+        refine: STATS.refineOf(refine, wepId),
+        arrowAtk: extra.arrowAtk != null ? Number(extra.arrowAtk) || 0 : STATS.arrowAtkFrom(extra),
+        equipAtk: fromEq.atk || 0,
+        variance: "mid",
+        size: extra.size || "M",
+      });
+      stats.bowAtk = bow;
+    }
 
     const hasEquip = DATA.SLOTS.some(function (slot) {
       return !!equip[slot.id];
     });
     if (hasEquip) {
-      const bare = STATS.computeHeroStats(heroId, allocated, DATA.emptyEquip(), level, {});
+      const bare = STATS.computeHeroStats(heroId, allocated, DATA.emptyEquip(), level, {}, extra);
       stats.gearDelta = {
         maxHp: stats.maxHp - bare.maxHp,
         maxMp: stats.maxMp - bare.maxMp,

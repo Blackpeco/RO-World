@@ -177,7 +177,7 @@
       mpRegen: 2,
       dodge: 0,
       accuracy: 100,
-      skills: ["arrowshot", "powershot", "focus", "soularrow"],
+      skills: ["arrowshot", "powershot", "focus", "soularrow", "double_strafe", "arrow_shower", "arrow_repel", "owl_eye", "vulture_eye", "improve_concentration"],
     },
   };
 
@@ -201,6 +201,8 @@
     if (it.type === "weapon") {
       if (it.weaponMatk) parts.push("Weapon MATK " + it.weaponMatk);
       else parts.push("Weapon ATK " + (it.weaponAtk || 0));
+    } else if (it.type === "ammo") {
+      parts.push("Arrow ATK " + (it.arrowAtk || 0));
     } else if (it.bonuses && it.bonuses.hardDef) {
       parts.push("Hard DEF " + it.bonuses.hardDef);
     }
@@ -389,6 +391,80 @@
       mp: 35,
       type: "self",
       button: "ประทับเหยี่ยว — คริ +15% ความแม่นยำ +20 นาน 4 เทิร์น (นับตอนศัตรูลงมือ) | CD 5 | MP 35",
+    },
+    double_strafe: {
+      id: "double_strafe",
+      icon: "assets/skills/powershot.png",
+      name: "ยิงสองนัด",
+      hero: "hunter",
+      cd: 0,
+      mp: 12,
+      type: "attack",
+      bowSkill: true,
+      afterCastMs: 300,
+      maxRank: 10,
+      button: "ยิงสองนัด — 200–380% ATK | After-cast 0.3s | SP 12",
+    },
+    arrow_shower: {
+      id: "arrow_shower",
+      icon: "assets/skills/rain.png",
+      name: "ฝนธนู",
+      hero: "hunter",
+      cd: 0,
+      mp: 15,
+      type: "attack",
+      bowSkill: true,
+      afterCastMs: 100,
+      cdMs: 300,
+      knockback: 2,
+      maxRank: 10,
+      button: "ฝนธนู — 160–250% ATK AoE | After-cast 0.1s | CD 0.3s | SP 15",
+    },
+    arrow_repel: {
+      id: "arrow_repel",
+      icon: "assets/skills/arrowshot.png",
+      name: "ดีดศร",
+      hero: "hunter",
+      cd: 0,
+      mp: 15,
+      type: "attack",
+      bowSkill: true,
+      knockback: 6,
+      maxRank: 10,
+      button: "ดีดศร — 150% ATK ดีด 6 ช่อง | SP 15",
+    },
+    owl_eye: {
+      id: "owl_eye",
+      icon: "assets/skills/focus.png",
+      name: "ตาเหยี่ยว",
+      hero: "hunter",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "ตาเหยี่ยว — DEX +Lv (ติดตัว)",
+    },
+    vulture_eye: {
+      id: "vulture_eye",
+      icon: "assets/skills/mark.png",
+      name: "ตาแร้ง",
+      hero: "hunter",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "ตาแร้ง — HIT +Lv และระยะธนู +Lv (ติดตัว)",
+    },
+    improve_concentration: {
+      id: "improve_concentration",
+      icon: "assets/skills/focus.png",
+      name: "สมาธิ",
+      hero: "hunter",
+      cd: 0,
+      mp: 20,
+      type: "self",
+      maxRank: 10,
+      button: "สมาธิ — AGI/DEX +(2+Lv)% นาน (40+20Lv) วินาที เปิดเผย 3×3",
     },
   };
 
@@ -1235,9 +1311,9 @@
     weapon_knife: { id: "weapon_knife", weight: 40, type: "weapon", name: "มีดสั้นฝึก", price: 180, weaponClass: "dagger", weaponAtk: 40, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
     weapon_dirk: { id: "weapon_dirk", weight: 50, type: "weapon", name: "กริช", price: 500, weaponClass: "dagger", weaponAtk: 75, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
     weapon_shadow: { id: "weapon_shadow", weight: 60, type: "weapon", name: "กริชเงา", price: 1200, weaponClass: "dagger", weaponAtk: 120, weaponMatk: 0, reqLevel: 30, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {}, tier: "high" },
-    weapon_bow: { id: "weapon_bow", weight: 50, type: "weapon", name: "ธนูฝึกยิง", price: 200, weaponClass: "bow", weaponAtk: 60, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
-    weapon_oakbow: { id: "weapon_oakbow", weight: 90, type: "weapon", name: "ธนูไม้โอ๊ค", price: 550, weaponClass: "bow", weaponAtk: 100, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
-    weapon_hawk: { id: "weapon_hawk", weight: 120, type: "weapon", name: "ธนูเหยี่ยว", price: 1400, weaponClass: "bow", weaponAtk: 150, weaponMatk: 0, reqLevel: 32, element: "none", jobs: DATA.JOB_BOW, bonuses: {}, tier: "high" },
+    weapon_bow: { id: "weapon_bow", weight: 50, type: "weapon", name: "ธนูฝึกยิง", price: 200, weaponClass: "bow", weaponAtk: 60, weaponMatk: 0, weaponLevel: 1, twoHand: true, reqLevel: 1, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
+    weapon_oakbow: { id: "weapon_oakbow", weight: 90, type: "weapon", name: "ธนูไม้โอ๊ค", price: 550, weaponClass: "bow", weaponAtk: 100, weaponMatk: 0, weaponLevel: 1, twoHand: true, reqLevel: 12, element: "none", jobs: DATA.JOB_BOW, bonuses: {} },
+    weapon_hawk: { id: "weapon_hawk", weight: 120, type: "weapon", name: "ธนูเหยี่ยว", price: 1400, weaponClass: "bow", weaponAtk: 150, weaponMatk: 0, weaponLevel: 1, twoHand: true, reqLevel: 32, element: "none", jobs: DATA.JOB_BOW, bonuses: {}, tier: "high" },
     weapon_staff: { id: "weapon_staff", weight: 40, type: "weapon", name: "คทาฝึกเวท", price: 200, weaponClass: "staff", weaponAtk: 0, weaponMatk: 100, reqLevel: 1, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
     weapon_arch: { id: "weapon_arch", weight: 50, type: "weapon", name: "คทาไม้", price: 650, weaponClass: "staff", weaponAtk: 0, weaponMatk: 170, reqLevel: 14, element: "none", jobs: DATA.JOB_STAFF, bonuses: {} },
     weapon_sage: { id: "weapon_sage", weight: 70, type: "weapon", name: "คทามหาเวท", price: 1600, weaponClass: "staff", weaponAtk: 0, weaponMatk: 260, reqLevel: 36, element: "none", jobs: DATA.JOB_STAFF, bonuses: {}, tier: "high" },
@@ -1277,6 +1353,10 @@
     cloak_night: { id: "cloak_night", weight: 50, type: "cloak", name: "ผ้าคลุมทหาร", price: 1000, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
     boots_gale: { id: "boots_gale", weight: 60, type: "boots", name: "รองเท้าเหล็ก", price: 950, tier: "high", jobs: DATA.JOB_HEAVY, defTier: "high", bonuses: { hardDef: 4 } },
     acc_triad: { id: "acc_triad", weight: 10, type: "acc", name: "แหวนอสูรสามภพ", price: 1300, tier: "high", bonuses: { atk: 35, matk: 35, crit: 8 } },
+
+    arrow: { id: "arrow", type: "ammo", name: "ลูกธนู", price: 1, arrowAtk: 25, reqLevel: 1, element: "none", jobs: DATA.JOB_BOW, stack: true, weight: 1, bonuses: {} },
+    arrow_steel: { id: "arrow_steel", type: "ammo", name: "ลูกธนูเหล็ก", price: 4, arrowAtk: 40, reqLevel: 12, element: "none", jobs: DATA.JOB_BOW, stack: true, weight: 1, bonuses: {} },
+    arrow_oridecon: { id: "arrow_oridecon", type: "ammo", name: "ลูกธนูโอริเดคอน", price: 10, arrowAtk: 50, reqLevel: 32, element: "none", jobs: DATA.JOB_BOW, stack: true, weight: 1, bonuses: {} },
   };
 
   DATA.ITEMS_BY_TYPE = {};
@@ -1284,6 +1364,7 @@
     if (!DATA.ITEMS_BY_TYPE[it.type]) DATA.ITEMS_BY_TYPE[it.type] = [];
     DATA.ITEMS_BY_TYPE[it.type].push(it);
   });
+  DATA.AMMO_ORDER = ["arrow", "arrow_steel", "arrow_oridecon"];
 
   /* Refine: wearables grant Hard DEF/MDEF; weapon grants ATK/MATK (assumed +8/+8). */
   DATA.HARD_PER_REFINE = 0.7;
@@ -1391,6 +1472,12 @@
       { id: "soularrow", requires: [{ id: "focus", min: 2 }] },
       { id: "rain", requires: [{ id: "arrowshot", min: 3 }, { id: "powershot", min: 2 }] },
       { id: "mark", requires: [{ id: "focus", min: 3 }, { id: "soularrow", min: 2 }] },
+      { id: "owl_eye", requires: [] },
+      { id: "vulture_eye", requires: [{ id: "owl_eye", min: 1 }] },
+      { id: "double_strafe", requires: [{ id: "vulture_eye", min: 1 }] },
+      { id: "arrow_shower", requires: [{ id: "double_strafe", min: 5 }] },
+      { id: "improve_concentration", requires: [] },
+      { id: "arrow_repel", requires: [{ id: "improve_concentration", min: 1 }] },
     ],
   };
 
@@ -1412,6 +1499,8 @@
     hunter: [
       ["arrowshot", "powershot", "rain"],
       ["focus", "soularrow", "mark"],
+      ["owl_eye", "vulture_eye", "double_strafe", "arrow_shower"],
+      ["improve_concentration", "arrow_repel"],
     ],
   };
 
@@ -1509,7 +1598,8 @@
 
   DATA.skillAdd = function (sess, id) {
     const preview = DATA.skillSessionPreview(sess);
-    if (DATA.skillSessionRank(sess, id) >= DATA.SKILL_MAX_RANK) return false;
+    const cap = (DATA.SKILLS[id] && DATA.SKILLS[id].maxRank) || DATA.SKILL_MAX_RANK;
+    if (DATA.skillSessionRank(sess, id) >= cap) return false;
     if (DATA.skillSessionRemaining(sess) < 1) return false;
     if (!DATA.skillUnlocked(id, preview, sess.heroId)) return false;
     sess.session[id] = (sess.session[id] || 0) + 1;

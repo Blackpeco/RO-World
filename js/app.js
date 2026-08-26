@@ -592,6 +592,13 @@
     App.refreshCityOrPage("potions");
   };
 
+  App.buyAmmo = function (id, qty) {
+    const r = PVE.buyAmmo(App.save, id, qty);
+    if (!r.ok) UI.toast(r.reason || "ซื้อไม่ได้");
+    else UI.toast("ซื้อแล้ว");
+    App.refreshCityOrPage("potions");
+  };
+
   App.openNpc = function (id) {
     if (id === "gear") App.goShop();
     else if (id === "potion") App.goPotionShop();

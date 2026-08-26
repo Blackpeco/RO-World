@@ -225,8 +225,8 @@
     clearPocket(pockets.far.x, pockets.far.y, pockets.far.rx, pockets.far.ry, pockets.far.open);
     clearPocket(pockets.deep.x, pockets.deep.y, pockets.deep.rx, pockets.deep.ry, pockets.deep.open);
 
-    for (let y = gate.y - 2; y <= gate.y + 2; y++) {
-      for (let x = gate.x - 1; x <= gate.x + 2; x++) {
+    for (let y = gate.y - 1; y <= gate.y + 1; y++) {
+      for (let x = gate.x - 1; x <= gate.x + 1; x++) {
         if (y <= 0 || x <= 0 || y >= n - 1 || x >= n - 1) continue;
         g.walkable[y][x] = true;
         g.cells[x + "," + y] = "X";
@@ -705,13 +705,13 @@
     fill(55, 45, 57, 45, "R", false);
 
     // 11. Kafra sits on the south ribbon (keep walk on the road, no extra stub).
-    const kafra = { x: 38, y: 49 };
+    const kafra = { x: 40, y: 49 };
     let kBest = 99;
     for (let x = 34; x <= 46; x++) {
       if (!walks[49] || !walks[49][x]) continue;
       const ch = kind[49][x];
       if (ch !== "." && ch !== "~" && ch !== "A" && ch !== "?") continue;
-      const d = Math.abs(x - 38);
+      const d = Math.abs(x - 40);
       if (d < kBest) {
         kBest = d;
         kafra.x = x;
@@ -719,8 +719,8 @@
     }
     put(kafra.x, kafra.y, "S", true);
 
-    // 12. East field gatehouse — only functional exit. 5 wide x 4 deep, every tile G.
-    fill(n - 4, cy - 2, n - 1, cy + 2, "G", true);
+    // 12. East field gatehouse — only functional exit. 3x3 G walk pad.
+    fill(n - 3, cy - 1, n - 1, cy + 1, "G", true);
     fill(n - 4, cy - 4, n - 1, cy - 3, "#", false);
     fill(n - 4, cy + 3, n - 1, cy + 4, "#", false);
     // Short straight G-pad apron (warp).
@@ -872,17 +872,27 @@
     ].forEach(function (s) {
       if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "L", true);
     });
+    let plazaB = 0;
+    function canPlantB(x, y) {
+      if (!kind[y] || !walks[y][x]) return false;
+      const ch = kind[y][x];
+      if ("WPSKGFFfTH#RrhCDN".indexOf(ch) >= 0) return false;
+      return ch === "." || ch === "~" || ch === "A";
+    }
     [
-      [Math.round(cx - 5), Math.round(cy - 4)],
-      [Math.round(cx + 5), Math.round(cy - 4)],
-      [Math.round(cx - 5), Math.round(cy + 4)],
-      [Math.round(cx + 5), Math.round(cy + 4)],
-      [Math.round(cx - 6), Math.round(cy - 1)],
-      [Math.round(cx + 6), Math.round(cy - 1)],
-      [Math.round(cx - 3), Math.round(cy + 6)],
-      [Math.round(cx + 3), Math.round(cy + 6)],
+      [36, 40],
+      [44, 40],
+      [40, 37],
+      [40, 43],
+      [34, 39],
+      [45, 41],
+      [33, 39],
+      [43, 41],
     ].forEach(function (s) {
-      if (kind[s[1]] && kind[s[1]][s[0]] === "~") put(s[0], s[1], "B", true);
+      if (plazaB >= 8) return;
+      if (!canPlantB(s[0], s[1])) return;
+      put(s[0], s[1], "B", true);
+      plazaB += 1;
     });
 
     // Spawn / warp aprons stay walkable.
@@ -1023,19 +1033,26 @@
     }
     const sw = (cityGrid.lotPts && cityGrid.lotPts.sw) || [];
     const se = (cityGrid.lotPts && cityGrid.lotPts.se) || [];
-    sw.concat(se).forEach(function (pt) {
-      add("house", "assets/city/house.png", pt[0] + 1, pt[1] + 2, 3.4, 4.8, 0);
-      add("tree", "assets/city/tree_sm.png", pt[0] + 2.7, pt[1] + 2.15, 2.4, 3.4, 1);
+    const houseW = 10.0;
+    const houseH = 14.0;
+    sw.forEach(function (pt) {
+      add("house", "assets/city/house.png", pt[0] + 1.6, pt[1] + 7, houseW, houseH, 0);
+      add("tree", "assets/city/tree_sm.png", pt[0] + 2.7, pt[1] + 3.4, 2.4, 3.4, 1);
     });
-    add("house", "assets/city/house.png", 56, 46, 3.2, 4.4, 0);
-    add("castle", "assets/city/castle.png", 40, 16, 13.5, 14.5, 0);
-    add("church", "assets/city/church.png", 57, 20, 11.5, 14.2, 0);
-    add("shop", "assets/city/shop_west.png", 18, 38, 3.2, 4.0, 0);
-    add("shop", "assets/city/shop_west.png", 24, 38, 3.2, 4.0, 0);
-    add("shop", "assets/city/shop_east.png", 56, 38, 3.2, 4.0, 0);
-    add("shop", "assets/city/shop_east.png", 62, 38, 3.2, 4.0, 0);
+    se.forEach(function (pt) {
+      const yOff = pt[1] <= 46 ? 13 : 7;
+      add("house", "assets/city/house.png", pt[0] + 1.6, pt[1] + yOff, houseW, houseH, 0);
+      add("tree", "assets/city/tree_sm.png", pt[0] + 2.7, pt[1] + 3.4, 2.4, 3.4, 1);
+    });
+    add("house", "assets/city/house.png", 56, 57, houseW, houseH, 0);
+    add("castle", "assets/city/castle.png", 40, 16, 20, 21, 0);
+    add("church", "assets/city/church.png", 57, 21, 18, 19, 0);
+    add("shop", "assets/city/shop_west.png", 18, 38, 9.0, 12.0, 0);
+    add("shop", "assets/city/shop_west.png", 24, 38, 9.0, 12.0, 0);
+    add("shop", "assets/city/shop_east.png", 56, 38, 9.0, 12.0, 0);
+    add("shop", "assets/city/shop_east.png", 62, 38, 9.0, 12.0, 0);
     add("fountain", "assets/city/fountain.png", 40, 40, 3.6, 3.8, 2);
-    add("gate", "assets/city/gatehouse.png", 78, 40, 5.6, 6.4, 2);
+    add("gate", "assets/city/gatehouse.png", 79.6, 36.8, 6.2, 7.0, -6);
     add("tower", "assets/city/tower.png", 1, 1, 2.6, 4.4, 4);
     add("tower", "assets/city/tower.png", 78, 1, 2.6, 4.4, 4);
     add("tower", "assets/city/tower.png", 1, 78, 2.6, 4.4, 4);
@@ -1068,37 +1085,38 @@
     return marks;
   }
 
+  MAP.cityLandmarks = cityLandmarks;
+  MAP.flowerAt = flowerAt;
+  MAP._cityMarks = null;
+
   const CITY_OVER_LABS = [
     { x: 40, y: 16, text: "ปราสาทโลหิต" },
-    { x: 78, y: 40, text: "ป่าสงบ" },
+    { x: 78, y: 38, text: "ป่าสงบ" },
   ];
+
+  function warpPropHtml(cx, cy, cam, vw, vh, zoff) {
+    const x = cx - 1;
+    const y = cy - 1;
+    const sx = x - cam.x;
+    const sy = y - cam.y;
+    if (sx < -4 || sy < -4 || sx > vw + 3 || sy > vh + 3) return "";
+    const z = 20 + ((cy * 2) | 0) + (zoff || 10);
+    return (
+      '<div class="city-prop kind-warp" style="left:' +
+      ((sx * 100) / vw).toFixed(3) +
+      "%;top:" +
+      ((sy * 100) / vh).toFixed(3) +
+      '%;--prop-w:3;--prop-h:3;z-index:' +
+      z +
+      '"><div class="warp-ripple" aria-hidden="true"><i></i><i></i><i></i></div></div>'
+    );
+  }
 
   function paintCityOverlay() {
     if (!hostEl) return;
     const grid = hostEl.querySelector(".map-grid");
     if (!grid) return;
-    let layer = grid.querySelector(".city-layer");
-    if (zoneId === "field") {
-      if (!layer) {
-        layer = document.createElement("div");
-        layer.className = "city-layer";
-        grid.appendChild(layer);
-      }
-      const cam = MAP.camera();
-      const vw = MAP.VIEW_W;
-      const vh = MAP.VIEW_H;
-      const gx = (fieldGrid.gate && fieldGrid.gate.x) || 2;
-      const gy = (fieldGrid.gate && fieldGrid.gate.y) || 96;
-      const sx = gx - cam.x;
-      const sy = gy - cam.y;
-      layer.innerHTML =
-        '<div class="city-prop kind-gate" style="left:' +
-        ((sx * 100) / vw).toFixed(3) +
-        "%;top:" +
-        ((sy * 100) / vh).toFixed(3) +
-        '%;--prop-w:5.6;--prop-h:6.4;z-index:24"><img src="assets/city/gatehouse.png" alt=""></div>';
-      return;
-    }
+    let layer = grid.querySelector(".city-layer:not(.field-layer)");
     if (zoneId !== "city") {
       if (layer) layer.parentNode.removeChild(layer);
       return;
@@ -1135,6 +1153,38 @@
           '" alt=""></div>'
       );
     });
+    const npcDefs = [
+      { ch: "W", src: "assets/chars/warrior_s.png", name: "อาวุธ" },
+      { ch: "P", src: "assets/chars/hunter_s.png", name: "ยา" },
+      { ch: "S", src: "assets/chars/angel.png", name: "คาฟร้า" },
+    ];
+    npcDefs.forEach(function (n) {
+      const pos = (cityGrid.npcs && cityGrid.npcs[n.ch]) || null;
+      if (!pos) return;
+      const sx = pos.x - cam.x;
+      const sy = pos.y - cam.y;
+      if (sx < -3 || sy < -6 || sx > vw + 2 || sy > vh + 2) return;
+      const z = 20 + ((pos.y * 2) | 0) + 8;
+      html.push(
+        '<div class="city-prop kind-npc" data-mx="' +
+          pos.x +
+          '" data-my="' +
+          pos.y +
+          '" style="left:' +
+          ((sx * 100) / vw).toFixed(3) +
+          "%;top:" +
+          ((sy * 100) / vh).toFixed(3) +
+          "%;--prop-w:1.8;--prop-h:5.2;z-index:" +
+          z +
+          '"><img class="map-sprite npc" src="' +
+          n.src +
+          '" alt=""><span class="npc-chip">' +
+          n.name +
+          "</span></div>"
+      );
+    });
+    html.push(warpPropHtml(78, 40, cam, vw, vh, 40));
+    html.push(warpPropHtml(40, 15, cam, vw, vh, 40));
     CITY_OVER_LABS.forEach(function (lab) {
       const sx = lab.x - cam.x;
       const sy = lab.y - cam.y;
@@ -1155,7 +1205,7 @@
   }
 
   const FIELD_OVER_MARKS = [
-    { kind: "gate", src: "assets/city/gatehouse.png", x: 2.2, y: 96.4, w: 5.4, h: 6.2, zoff: 3 },
+    { kind: "gate", src: "assets/city/gatehouse.png", x: 2.2, y: 99.0, w: 5.4, h: 6.2, zoff: -6 },
   ];
   MAP.FIELD_OVER_MARKS = FIELD_OVER_MARKS;
   const FIELD_OVER_LABS = [
@@ -1221,6 +1271,9 @@
           "</div>"
       );
     });
+    const gx = (fieldGrid.gate && fieldGrid.gate.x) || 2;
+    const gy = (fieldGrid.gate && fieldGrid.gate.y) || 96;
+    html.push(warpPropHtml(gx, gy, cam, vw, vh, 40));
     layer.innerHTML = html.join("");
   }
 
@@ -1346,28 +1399,43 @@
     return { x: wx - cam.x, y: wy - cam.y };
   };
 
-  MAP.walkToAdjacent = function (from, target) {
-    if (!from || !target) return;
-    if (Math.max(Math.abs(from.x - target.x), Math.abs(from.y - target.y)) <= 1) return;
+  function bestAdjacentTrail(from, target) {
+    if (!from || !target) return null;
+    if (Math.max(Math.abs(from.x - target.x), Math.abs(from.y - target.y)) <= 1) {
+      return { path: [], cost: 0 };
+    }
     const dirs = MAP.DIRS8;
     let best = null;
     let bestLen = 1e9;
-    dirs.forEach(function (d) {
+    for (let i = 0; i < dirs.length; i++) {
+      const d = dirs[i];
       const x = target.x + d[0];
       const y = target.y + d[1];
-      if (!MAP.isWalkable(x, y)) return;
-      if (from.x === x && from.y === y) {
-        best = [];
-        bestLen = 0;
-        return;
-      }
+      if (!MAP.isWalkable(x, y)) continue;
+      if (from.x === x && from.y === y) return { path: [], cost: 0 };
       const trail = MAP.path(from, { x: x, y: y });
-      if (trail.length && trail.length < bestLen) {
+      if (!trail.length) continue;
+      const last = trail[trail.length - 1];
+      if (last.x !== x || last.y !== y) continue;
+      if (trail.length < bestLen) {
         best = trail;
         bestLen = trail.length;
       }
-    });
-    if (best && best.length) walkPath(best);
+    }
+    if (!best) return null;
+    return { path: best, cost: bestLen };
+  }
+
+  MAP.adjacentWalkCost = function (from, target) {
+    const hit = bestAdjacentTrail(from, target);
+    return hit ? hit.cost : -1;
+  };
+
+  MAP.walkToAdjacent = function (from, target) {
+    const hit = bestAdjacentTrail(from, target);
+    if (!hit) return false;
+    if (hit.path.length) walkPath(hit.path);
+    return true;
   };
 
   MAP.bossAt = function (x, y) {
@@ -1746,12 +1814,23 @@
   function nearestLivingMob(from) {
     const mobs = livingMobs();
     let best = null;
-    let bestD = 1e9;
+    let bestCost = Infinity;
+    let bestCheb = Infinity;
+    let bestManh = Infinity;
     mobs.forEach(function (m) {
-      const d = Math.abs(from.x - m.x) + Math.abs(from.y - m.y);
-      if (d < bestD) {
-        bestD = d;
+      const cost = MAP.adjacentWalkCost(from, m);
+      if (cost < 0 || !isFinite(cost)) return;
+      const ch = Math.max(Math.abs(from.x - m.x), Math.abs(from.y - m.y));
+      const mh = Math.abs(from.x - m.x) + Math.abs(from.y - m.y);
+      if (
+        cost < bestCost ||
+        (cost === bestCost && ch < bestCheb) ||
+        (cost === bestCost && ch === bestCheb && mh < bestManh)
+      ) {
         best = m;
+        bestCost = cost;
+        bestCheb = ch;
+        bestManh = mh;
       }
     });
     return best;
@@ -1780,8 +1859,7 @@
       ? WORLD.HUNTER_RANGE
       : 1;
     if (dist <= hold) return;
-    const steps = MAP.path(p, { x: mob.x, y: mob.y });
-    if (steps.length) walkPath(steps);
+    MAP.walkToAdjacent(p, mob);
   }
 
   function startAutoLoop() {
@@ -2342,16 +2420,15 @@
       else if (ch === "#") cls += " battlement";
       else if (ch === "L") cls += " lamp plaza";
       else if (ch === "B") cls += " flower plaza";
-      else if (ch === "W") cls += " npc shop shop-weapon";
-      else if (ch === "P") cls += " npc shop shop-potion";
-      else if (ch === "S") cls += " npc shop shop-kafra";
-      else if (ch === "K") cls += " npc keep-gate";
-      else if (ch === "G") cls += " gate";
+      else if (ch === "W") cls += " npc street";
+      else if (ch === "P") cls += " npc street";
+      else if (ch === "S") cls += " npc street";
+      else if (ch === "K") cls += " npc warp";
+      else if (ch === "G") cls += " gate warp";
       else if (walk) cls += " street";
-      if (walk && flowerAt(x, y) && "WPSKGF".indexOf(ch) < 0) cls += " flower";
     }
     if (zoneId === "field") {
-      if (fieldGrid.cells[x + "," + y] === "X") cls += " gate";
+      if (fieldGrid.cells[x + "," + y] === "X") cls += " gate warp";
       if (walk && fieldGrid.trails && fieldGrid.trails[x + "," + y]) cls += " trail";
       if (fieldGrid.plain && fieldGrid.plain[x + "," + y]) cls += " plain";
       const fdist = fieldGrid.spawn ? Math.abs(x - fieldGrid.spawn.x) + Math.abs(y - fieldGrid.spawn.y) : 999;
@@ -2364,6 +2441,7 @@
     }
     return cls;
   }
+  MAP.tileClass = tileClass;
 
   function tileInner(x, y, walk) {
     if (zoneId === "bosses") {
@@ -2378,12 +2456,7 @@
     }
     if (zoneId === "city") {
       const ch = cityGrid.cells[x + "," + y] || "";
-      if (ch === "W") return '<span class="map-boss-lab">อาวุธ</span>';
-      if (ch === "P") return '<span class="map-boss-lab">ยา</span>';
-      if (ch === "S") return '<span class="map-boss-lab">คาฟร้า</span>';
-      if (ch === "K") return x === 40 && y === 16 ? '<span class="map-boss-lab">ปราสาทโลหิต</span>' : "";
-      if (ch === "G") return x === 78 && y === 40 ? '<span class="map-boss-lab">ป่าสงบ</span>' : "";
-      if (ch === "B" || (walk && flowerAt(x, y))) return tileArt("assets/tiles/flowers.png", "flower");
+      if (ch === "B") return tileArt("assets/tiles/flowers.png", "flower");
       return "";
     }
     if (zoneId === "field") {
@@ -2431,7 +2504,7 @@
             x +
             '" data-my="' +
             y +
-            (inMap && walk && flowerAt(x, y) ? '" data-flower="1' : "") +
+            (inMap && walk && zoneId !== "city" && flowerAt(x, y) ? '" data-flower="1' : "") +
             '">' +
             (inMap ? tileInner(x, y, walk) : "") +
             "</div>"
@@ -2468,7 +2541,7 @@
         el.className = tileClass(x, y, walk, inMap);
         el.setAttribute("data-mx", String(x));
         el.setAttribute("data-my", String(y));
-        if (inMap && walk && flowerAt(x, y)) el.setAttribute("data-flower", "1");
+        if (inMap && walk && zoneId !== "city" && flowerAt(x, y)) el.setAttribute("data-flower", "1");
         else el.removeAttribute("data-flower");
         el.innerHTML = inMap ? tileInner(x, y, walk) : "";
       }

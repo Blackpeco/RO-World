@@ -138,6 +138,15 @@
       totalPts: derived.totalPts ? Object.assign({}, derived.totalPts) : DATA.emptyAllocated(),
       eqPts: derived.eqPts ? Object.assign({}, derived.eqPts) : DATA.emptyAllocated(),
       gearDelta: derived.gearDelta ? Object.assign({}, derived.gearDelta) : { maxHp: 0, maxMp: 0, atk: 0, matk: 0, def: 0, mdef: 0, aspeed: 0 },
+      bowAtk: derived.bowAtk || null,
+      weaponClass: derived.weaponClass || null,
+      twoHand: !!derived.twoHand,
+      owlDex: derived.owlDex || 0,
+      vultureHit: derived.vultureHit || 0,
+      vultureRange: derived.vultureRange || 0,
+      arrowAtk: derived.arrowAtk,
+      ammo: derived.ammo || null,
+      arrowCount: derived.arrowCount,
     };
   };
 
@@ -235,6 +244,194 @@
     if (unit.dragonStacks > 0) m += unit.dragonStacks * 50;
     if (unit.wrathTurns > 0) m += unit.wrathCritMult;
     return m;
+  };
+
+  /* ---------- locked bow ATK combat ---------- */
+  COMBAT.consumeBowAmmo = function (unit, save) {
+    if (typeof PVE !== "undefined" && PVE && typeof PVE.consumeAmmo === "function") {
+      return PVE.consumeAmmo(save, unit);
+    }
+    if (!unit) return { ok: false, reason: "no-arrow" };
+    let n = STATS.arrowCountFrom(unit);
+    if (n <= 0) return { ok: false, reason: "no-arrow" };
+    n -= 1;
+    if (unit.ammo && typeof unit.ammo === "object") unit.ammo.count = n;
+    unit.arrowCount = n;
+    return { ok: true, count: n };
+  };
+
+  COMBAT.hasBowAmmoForCombat = function (unit, opts) {
+    opts = opts || {};
+    if (opts.arrowAtk != null) return true;
+    if (unit && unit.arrowAtk != null) return true;
+    if (STATS.hasBowAmmo && STATS.hasBowAmmo(unit)) return true;
+    if (opts && opts !== unit && STATS.hasBowAmmo && STATS.hasBowAmmo(opts)) return true;
+    return false;
+  };
+
+  COMBAT.bowSkillGate = function (unit, opts) {
+    opts = opts || {};
+    const holds = (STATS.holdsBow && STATS.holdsBow(unit)) || (unit && unit.weaponClass === "bow") || opts.hasBow;
+    if (!holds) return { ok: false, reason: "no-bow" };
+    if (!COMBAT.hasBowAmmoForCombat(unit, opts)) return { ok: false, reason: "no-arrow" };
+    return { ok: true };
+  };
+
+  COMBAT.unitBowAtk = function (unit, opts) {
+    opts = opts || {};
+    const holds = (STATS.holdsBow && STATS.holdsBow(unit)) || (unit && unit.weaponClass === "bow") || opts.hasBow || opts.baseWeaponAtk != null;
+    if (!holds) return STATS.computeBowAtk ? STATS.computeBowAtk({}) : { ok: false, reason: "no-bow", atk: 0 };
+    const pts = (unit && unit.totalPts) || {};
+    const ranks = (unit && unit.skillRanks) || {};
+    const owl = STATS.owlEyeDex ? STATS.owlEyeDex(ranks.owl_eye) : 0;
+    let dex = Math.floor(Number(opts.dex != null ? opts.dex : (pts.dex || (unit && unit.dex) || 0)) + owl);
+    if (unit && (unit.concPct || unit.improveConcentration)) {
+      const pct = Number(unit.concPct) || 0;
+      const body = (unit.allocated && unit.allocated.dex || 0) + (unit.eqPts && unit.eqPts.dex || 0) + owl;
+      dex = dex + Math.floor(body * pct);
+    }
+    const wepId = unit && unit.equip && unit.equip.weapon;
+    const wep = wepId && DATA.ITEMS && DATA.ITEMS[wepId];
+    return STATS.computeBowAtk({
+      hasBow: true,
+      level: opts.level != null ? opts.level : (unit && unit.level) || 1,
+      str: opts.str != null ? opts.str : pts.str || (unit && unit.str) || 0,
+      dex: dex,
+      luk: opts.luk != null ? opts.luk : pts.luk || (unit && unit.luk) || 0,
+      baseWeaponAtk: opts.baseWeaponAtk != null ? opts.baseWeaponAtk : (wep && wep.weaponAtk) || (unit && unit.baseWeaponAtk) || 0,
+      weaponLevel: opts.weaponLevel != null ? opts.weaponLevel : (wep && wep.weaponLevel) || (unit && unit.weaponLevel) || 1,
+      refine: opts.refine != null ? opts.refine : (wepId ? STATS.refineOf(unit.refine, wepId) : (unit && unit.refinePlus) || 0),
+      arrowAtk: opts.arrowAtk != null ? opts.arrowAtk : STATS.arrowAtkFrom(unit),
+      equipAtk: opts.equipAtk != null ? opts.equipAtk : (unit && unit.equipAtk) || 0,
+      consumableAtk: opts.consumableAtk || 0,
+      variance: opts.variance || "mid",
+      size: opts.size || "M",
+      element: opts.element != null ? opts.element : 1,
+      atkPct: opts.atkPct,
+      race: opts.race,
+      sizeMod: opts.sizeMod,
+      property: opts.property,
+      classMod: opts.classMod,
+      masteryAtk: opts.masteryAtk,
+      buffAtk: opts.buffAtk,
+    });
+  };
+
+  COMBAT.bowRaw = function (atk, opts) {
+    opts = opts || {};
+    atk = Number(atk) || 0;
+    const ranged = Number(opts.ranged != null ? opts.ranged : opts.rangedPct) || 0;
+    const rangedRed = Number(opts.rangedRed != null ? opts.rangedRed : opts.rangedRedPct) || 0;
+    const dmgPct = Number(opts.damage != null ? opts.damage : opts.damagePct) || 0;
+    const skillDmg = Number(opts.skillDmg != null ? opts.skillDmg : opts.skillDmgPct) || 0;
+    let raw;
+    if (opts.skillMod != null) {
+      raw = Math.floor(atk * Number(opts.skillMod) * (1 + skillDmg) * (1 + ranged));
+    } else {
+      raw = Math.floor(atk * (1 + ranged) * (1 - rangedRed) * (1 + dmgPct));
+    }
+    if (opts.crit) raw = Math.floor(raw * 1.4);
+    return raw;
+  };
+
+  COMBAT.applyBowDefense = function (raw, target, opts) {
+    opts = opts || {};
+    raw = Number(raw) || 0;
+    const hardDef = (target && target.hardDef) || 0;
+    const bypass = opts.bypass != null ? opts.bypass : 0;
+    const defReduce = opts.defReduce || 0;
+    const hf = STATS.hardFactor(hardDef, defReduce, bypass);
+    let after = Math.floor(raw * hf);
+    if (!opts.crit) {
+      const baseSoft = target ? (target.softDef != null ? target.softDef : (target.def || 0)) : 0;
+      const bonusA = ((target && target.softDefBonusA) || 0) + (opts.softBonusA || 0);
+      const bonusB = ((target && target.softDefBonusB) || 0) + (opts.softBonusB || 0);
+      const totalSoft = STATS.totalSoft ? STATS.totalSoft(baseSoft, bonusA, bonusB) : Math.floor((baseSoft + bonusA) * (1 + bonusB / 100));
+      after = after - totalSoft;
+    }
+    if (after < 1) after = 1;
+    return after;
+  };
+
+  COMBAT.knockbackStep = function (from, pos) {
+    from = from || { x: 0, y: 0 };
+    pos = pos || { x: 0, y: 0 };
+    let sx = Math.sign((pos.x || 0) - (from.x || 0));
+    let sy = Math.sign((pos.y || 0) - (from.y || 0));
+    if (!sx && !sy) { sx = 0; sy = 1; }
+    return { x: (pos.x || 0) + sx, y: (pos.y || 0) + sy };
+  };
+
+  COMBAT.knockbackTiles = function (ent, from, tiles, isWalkable) {
+    tiles = Math.max(0, Math.floor(Number(tiles) || 0));
+    const start = { x: (ent && ent.x) || 0, y: (ent && ent.y) || 0 };
+    let cur = { x: start.x, y: start.y };
+    const origin = from || start;
+    for (let i = 0; i < tiles; i++) {
+      const nxt = COMBAT.knockbackStep(origin, cur);
+      if (typeof isWalkable === "function" && !isWalkable(nxt.x, nxt.y)) break;
+      cur = nxt;
+    }
+    if (ent && typeof ent === "object") {
+      ent.x = cur.x;
+      ent.y = cur.y;
+    }
+    return { dx: cur.x - start.x, dy: cur.y - start.y, x: cur.x, y: cur.y };
+  };
+
+  COMBAT.doBowHit = function (state, actor, target, skillName, opts) {
+    opts = opts || {};
+    const rng = state && state.rng;
+    const isSkill = !!opts.skill;
+    let conn = { hit: true, crit: false, pd: false };
+    if (!opts.skipHitCheck) {
+      conn = COMBAT.rollConnect(actor, target, rng, {
+        atkRatio: 1,
+        matkRatio: 0,
+        canCrit: isSkill ? false : opts.canCrit !== false,
+        forceCrit: opts.forceCrit,
+        skipPd: isSkill || !!opts.skipPd,
+        surround: opts.surround != null ? opts.surround : COMBAT.surroundCount(state),
+        bonusCrit: opts.bonusCrit || 0,
+        vsSilence: opts.vsSilence,
+      });
+      if (!conn.hit) {
+        if (!opts.skipConsume) COMBAT.consumeBowAmmo(actor, state && state.save);
+        if (state) {
+          COMBAT.pushLog(state, '<span class="log-miss">💨 ' + actor.name + " ใช้ " + skillName + " — หลบหลีก!</span>");
+          COMBAT.emitFx(state, { kind: "miss", side: target.side, pd: !!conn.pd });
+        }
+        return { hit: false, damage: 0, crit: false, pd: conn.pd, raw: 0 };
+      }
+    }
+    const crit = !isSkill && !!conn.crit;
+    let atk = opts.atk;
+    if (atk == null) {
+      const bow = COMBAT.unitBowAtk(actor, Object.assign({}, opts, { variance: crit ? "max" : (opts.variance || "mid") }));
+      if (!bow.ok) return { hit: false, damage: 0, crit: false, reason: bow.reason || "no-bow", raw: 0 };
+      atk = bow.atk;
+    }
+    if (!opts.skipConsume) COMBAT.consumeBowAmmo(actor, state && state.save);
+    const raw = COMBAT.bowRaw(atk, {
+      skillMod: opts.skillMod,
+      skillDmg: opts.skillDmg,
+      ranged: opts.ranged,
+      rangedRed: opts.rangedRed,
+      damage: opts.damage,
+      crit: crit,
+    });
+    const dealt = COMBAT.applyBowDefense(raw, target, { crit: crit, bypass: opts.bypass, defReduce: opts.defReduce });
+    let applied = { dealt: dealt };
+    if (state) {
+      applied = COMBAT.applyIncoming(state, actor, target, dealt, skillName);
+      const tag = crit ? ' <span class="log-crit">CRIT!</span>' : "";
+      if (applied.dealt > 0 || !applied.blocked) {
+        COMBAT.pushLog(state, '<span class="log-dmg">💥 ' + actor.name + " ใช้ " + skillName + " ทำความเสียหาย " + applied.dealt + tag + "</span>");
+      }
+      if (applied.dealt > 0) COMBAT.emitFx(state, { kind: "dmg", side: target.side, amount: applied.dealt, crit: crit });
+      if (target.hp <= 0) COMBAT.endBattle(state, actor);
+    }
+    return { hit: true, damage: applied.dealt, crit: crit, raw: raw, applied: applied };
   };
 
   /* ---------- damage formulas ---------- */
@@ -375,7 +572,7 @@
     }
 
     const pd = Number(target && target.perfectDodge) || 0;
-    if (pd > 0 && rng && rng.chance(pd)) {
+    if (!opts.skipPd && pd > 0 && rng && rng.chance(pd)) {
       return { hit: false, crit: false, pd: true };
     }
 
@@ -444,6 +641,7 @@
       mode: opts.mode || "pve",
       fx: [],
       fxQueue: [],
+      save: opts.save || null,
     };
   };
 
@@ -934,6 +1132,24 @@
       case "mark":
         body = "คริ +" + util(15) + "% ความแม่นยำ +" + util(20) + " นาน 4 เทิร์น (นับตอนศัตรูลงมือ)";
         break;
+      case "double_strafe":
+        body = "ดาเมจ " + Math.round(STATS.doubleStrafeMod(show) * 100) + "% ATK | ต้องถือธนู + ลูกศร";
+        break;
+      case "arrow_shower":
+        body = "ดาเมจ " + Math.round(STATS.arrowShowerMod(show) * 100) + "% ATK AoE " + STATS.arrowShowerAoe(show) + "×" + STATS.arrowShowerAoe(show) + " ดีด 2 ช่อง";
+        break;
+      case "arrow_repel":
+        body = "ดาเมจ 150% ATK ดีด 6 ช่อง";
+        break;
+      case "owl_eye":
+        body = "DEX +" + STATS.owlEyeDex(show);
+        break;
+      case "vulture_eye":
+        body = "HIT +" + STATS.vultureEyeHit(show) + " ระยะธนู +" + STATS.vultureEyeRange(show);
+        break;
+      case "improve_concentration":
+        body = "AGI/DEX +" + Math.round(STATS.improveConcentrationPct(show) * 100) + "% นาน " + STATS.improveConcentrationDuration(show) + "s";
+        break;
       default:
         body = (def.button && def.button.indexOf(" — ") >= 0) ? def.button.split(" — ").slice(1).join(" — ") : (def.button || "");
     }
@@ -1063,12 +1279,20 @@
     const def = DATA.SKILLS[skillId];
     if (!def) return { ok: false, reason: "unknown" };
     if (!COMBAT.skillReady(actor, skillId, def)) return { ok: false, reason: "not-ready" };
+    if (def.bowSkill || skillId === "double_strafe" || skillId === "arrow_shower" || skillId === "arrow_repel") {
+      const gate = COMBAT.bowSkillGate(actor);
+      if (!gate.ok) return gate;
+    }
     const target = COMBAT.opponentOf(state, actor);
     COMBAT.spendAndCd(actor, def);
     COMBAT.emitFx(state, { kind: "act", side: actor.side, skillId: skillId, anim: COMBAT.skillAnimKind(skillId, def) });
 
     switch (skillId) {
       case "attack": {
+        if (STATS.holdsBow(actor) && COMBAT.hasBowAmmoForCombat(actor)) {
+          COMBAT.doBowHit(state, actor, target, def.name, { variance: "mid" });
+          break;
+        }
         const sc = COMBAT.atkScale(actor, "attack", 1.4, 0);
         COMBAT.doHitAttack(state, actor, target, def.name, sc.atk, sc.matk);
         break;
@@ -1282,6 +1506,49 @@
         COMBAT.pushLog(
           state,
           '<span class="log-buff">🦅 ' + actor.name + " ประทับเหยี่ยว คริ +" + actor.markCrit.toFixed(1) + "% แม่น +" + actor.markAcc.toFixed(1) + " นาน 4 เทิร์น</span>"
+        );
+        break;
+      }
+      case "double_strafe": {
+        const lv = COMBAT.rankOf(actor, "double_strafe");
+        const bow = COMBAT.unitBowAtk(actor, { variance: "mid" });
+        if (!bow.ok) return { ok: false, reason: bow.reason || "no-bow" };
+        COMBAT.doBowHit(state, actor, target, def.name, { skill: true, atk: bow.atk, skillMod: STATS.doubleStrafeMod(lv) });
+        break;
+      }
+      case "arrow_shower": {
+        const lv = COMBAT.rankOf(actor, "arrow_shower");
+        const bow = COMBAT.unitBowAtk(actor, { variance: "mid" });
+        if (!bow.ok) return { ok: false, reason: bow.reason || "no-bow" };
+        const res = COMBAT.doBowHit(state, actor, target, def.name, { skill: true, atk: bow.atk, skillMod: STATS.arrowShowerMod(lv) });
+        if (res && res.hit) COMBAT.knockbackTiles(target, actor, 2);
+        break;
+      }
+      case "arrow_repel": {
+        const bow = COMBAT.unitBowAtk(actor, { variance: "mid" });
+        if (!bow.ok) return { ok: false, reason: bow.reason || "no-bow" };
+        const res = COMBAT.doBowHit(state, actor, target, def.name, { skill: true, atk: bow.atk, skillMod: STATS.arrowRepelMod(COMBAT.rankOf(actor, "arrow_repel")) });
+        if (res && res.hit) COMBAT.knockbackTiles(target, actor, 6);
+        break;
+      }
+      case "owl_eye":
+      case "vulture_eye":
+        COMBAT.pushLog(state, '<span class="log-buff">' + actor.name + " ใช้ " + def.name + " (ติดตัว)</span>");
+        break;
+      case "improve_concentration": {
+        const lv = COMBAT.rankOf(actor, "improve_concentration");
+        actor.concPct = STATS.improveConcentrationPct(lv);
+        actor.concSec = STATS.improveConcentrationDuration(lv);
+        actor.concTurns = actor.concSec;
+        const owl = STATS.owlEyeDex(actor.skillRanks && actor.skillRanks.owl_eye);
+        const baseDex = ((actor.allocated && actor.allocated.dex) || 0) + ((actor.eqPts && actor.eqPts.dex) || 0) + owl;
+        const baseAgi = ((actor.allocated && actor.allocated.agi) || 0) + ((actor.eqPts && actor.eqPts.agi) || 0);
+        actor.concDex = Math.floor(baseDex * actor.concPct);
+        actor.concAgi = Math.floor(baseAgi * actor.concPct);
+        actor.concReveal = 3;
+        COMBAT.pushLog(
+          state,
+          '<span class="log-buff">🎯 ' + actor.name + " Improve Concentration DEX/AGI +" + Math.round(actor.concPct * 100) + "% นาน " + actor.concSec + "s</span>"
         );
         break;
       }

@@ -9,6 +9,9 @@
   const PVE = {};
 
   PVE.CHAR_NAME_MAX = 24;
+  PVE.isBowHero = function (heroId) {
+    return DATA.heroJob(heroId) === "archer" || heroId === "hunter";
+  };
   PVE.countNameChars = function (s) {
     if (typeof Intl !== "undefined" && Intl.Segmenter) {
       return Array.from(new Intl.Segmenter("th", { granularity: "grapheme" }).segment(s)).length;
@@ -91,7 +94,7 @@
   };
 
   PVE.createSave = function (heroId, allocated, charName) {
-    return {
+    const save = {
       heroId: heroId,
       allocated: Object.assign(DATA.emptyAllocated(), allocated),
       level: 1,
@@ -136,6 +139,12 @@
       charName: typeof charName === "string" ? charName : "",
       username: "",
     };
+    if (PVE.isBowHero(heroId)) {
+      save.ammo = { id: "arrow", count: 100 };
+      save.arrow = "arrow";
+      save.arrowCount = 100;
+    }
+    return save;
   };
 
   PVE.ensureProgress = function (save) {
@@ -174,6 +183,22 @@
           save.equip[slot.id] = null;
         }
       });
+    }
+    if (PVE.isBowHero(save.heroId) && save.ammo === undefined) {
+      if (save.arrowCount != null || save.arrow) {
+        save.ammo = {
+          id: save.arrow || "arrow",
+          count: save.arrowCount != null ? Math.max(0, Math.floor(Number(save.arrowCount) || 0)) : 0,
+        };
+      } else {
+        save.ammo = { id: "arrow", count: 100 };
+        save.arrow = "arrow";
+        save.arrowCount = 100;
+      }
+    }
+    if (save.ammo && typeof save.ammo === "object") {
+      if (save.arrowCount == null && save.ammo.count != null) save.arrowCount = save.ammo.count;
+      if (save.arrow == null && save.ammo.id) save.arrow = save.ammo.id;
     }
     save.level = save.baseLevel;
     return save;
@@ -310,9 +335,17 @@
 
   PVE.derived = function (save) {
     PVE.ensureProgress(save);
-    const d = STATS.computeHeroStats(save.heroId, save.allocated, save.equip, save.level, save.refine);
+    const d = STATS.computeHeroStats(save.heroId, save.allocated, save.equip, save.level, save.refine, {
+      skillRanks: save.skillRanks,
+      ammo: save.ammo,
+      arrowAtk: save.arrowAtk,
+      arrowCount: save.arrowCount,
+    });
     d.potionAspdMod = DATA.activePotionAspdMod(save.potionBuffs);
     d.weight = PVE.weightState(save);
+    d.ammo = save.ammo || null;
+    d.arrowAtk = save.arrowAtk;
+    d.arrowCount = save.arrowCount;
     return d;
   };
 
@@ -328,6 +361,9 @@
     Object.keys(save.materials || {}).forEach(function (id) {
       w += (save.materials[id] || 0) * DATA.itemWeight(id);
     });
+    if (save.ammo && save.ammo.id && save.ammo.count) {
+      w += (save.ammo.count || 0) * DATA.itemWeight(save.ammo.id);
+    }
     return w;
   };
   PVE.maxWeight = function (save) {
@@ -370,6 +406,9 @@
     d.skillRanks = Object.assign({}, ranks);
     d.skills = DATA.learnedSkills(save.heroId, ranks);
     const unit = COMBAT.createUnit(d, "left");
+    unit.ammo = save.ammo || unit.ammo;
+    if (save.arrowAtk != null) unit.arrowAtk = save.arrowAtk;
+    if (save.arrowCount != null) unit.arrowCount = save.arrowCount;
     unit.noRegen = !!(d.weight && d.weight.noRegen);
     if (d.potionAspdMod > 0) unit.potionAspdMod = d.potionAspdMod;
     if (PVE.potionBuffRemainMs(save, "berserk") > 0) unit.berserk = true;
@@ -424,7 +463,7 @@
     save.fightKind = "boss";
     const hero = PVE.buildHeroUnit(save);
     const boss = PVE.buildBossUnit(def.id);
-    const state = COMBAT.createState(hero, boss, { mode: "pve" });
+    const state = COMBAT.createState(hero, boss, { mode: "pve", save: save });
     COMBAT.pushLog(
       state,
       '<span class="log-system">' +
@@ -448,7 +487,7 @@
     save.fightKind = "field";
     const hero = PVE.buildHeroUnit(save);
     const mob = PVE.buildMonsterUnit(def.id);
-    const state = COMBAT.createState(hero, mob, { mode: "pve-field" });
+    const state = COMBAT.createState(hero, mob, { mode: "pve-field", save: save });
     COMBAT.pushLog(
       state,
       '<span class="log-system">' +
@@ -476,6 +515,37 @@
   PVE.snapshotVitals = function (save, unit) {
     save.hp = unit.hp;
     save.mp = unit.mp;
+    PVE.syncAmmoFromUnit(save, unit);
+  };
+
+  PVE.syncAmmoFromUnit = function (save, unit) {
+    if (!save || !unit) return;
+    if (unit.ammo && typeof unit.ammo === "object") save.ammo = unit.ammo;
+    if (unit.arrowCount != null) save.arrowCount = unit.arrowCount;
+    else if (save.ammo && save.ammo.count != null) save.arrowCount = save.ammo.count;
+    if (save.ammo && save.ammo.id) save.arrow = save.ammo.id;
+  };
+
+  PVE.consumeAmmo = function (save, unit) {
+    const src = unit || save;
+    if (!src) return { ok: false, reason: "no-arrow" };
+    let n = STATS.arrowCountFrom(src);
+    if (n <= 0) return { ok: false, reason: "no-arrow" };
+    n -= 1;
+    if (unit) {
+      if (unit.ammo && typeof unit.ammo === "object") unit.ammo.count = n;
+      unit.arrowCount = n;
+    }
+    if (save) {
+      if (!save.ammo || typeof save.ammo !== "object") {
+        save.ammo = { id: (unit && unit.ammo && unit.ammo.id) || save.arrow || "arrow", count: n };
+      } else {
+        save.ammo.count = n;
+      }
+      save.arrowCount = n;
+      if (save.ammo.id) save.arrow = save.ammo.id;
+    }
+    return { ok: true, count: n };
   };
 
   PVE.baseExpToNext = function (lv) {
@@ -659,6 +729,32 @@
     return { ok: true };
   };
 
+  PVE.buyAmmo = function (save, id, qty) {
+    PVE.ensureProgress(save);
+    qty = Math.floor(Number(qty) || 0);
+    if (qty !== 1 && qty !== 100) return { ok: false, reason: "จำนวนไม่ถูกต้อง" };
+    const item = DATA.ITEMS && DATA.ITEMS[id];
+    if (!item || item.type !== "ammo") return { ok: false, reason: "ไม่มีลูกธนูนี้" };
+    if (!PVE.isBowHero(save.heroId)) return { ok: false, reason: "อาชีพนี้ซื้อไม่ได้" };
+    const lv = save.baseLevel || save.level || 1;
+    if (item.reqLevel && lv < item.reqLevel) return { ok: false, reason: "เลเวลไม่ถึง" };
+    const cost = (item.price || 0) * qty;
+    if (save.zeno < cost) return { ok: false, reason: "Zeno ไม่พอ" };
+    const extra = DATA.itemWeight(id) * qty;
+    if (!PVE.canCarry(save, extra)) return { ok: false, reason: "น้ำหนักเต็ม แบกไม่ไหว" };
+    save.zeno -= cost;
+    if (!save.ammo || typeof save.ammo !== "object") save.ammo = { id: id, count: 0 };
+    if (save.ammo.id && save.ammo.id !== id) {
+      save.ammo = { id: id, count: qty };
+    } else {
+      save.ammo.id = id;
+      save.ammo.count = (save.ammo.count || 0) + qty;
+    }
+    save.arrow = save.ammo.id;
+    save.arrowCount = save.ammo.count;
+    return { ok: true };
+  };
+
   PVE.potionCount = function (save, potionId) {
     return ((save && save.potions) || {})[potionId] || 0;
   };
@@ -782,6 +878,22 @@
     return { ok: true };
   };
 
+  PVE.twoHandConflict = function (save, slotId, item) {
+    if (!save || !item) return null;
+    const equip = save.equip || {};
+    const wornWep = equip.weapon && DATA.ITEMS[equip.weapon];
+    const isBow = item.weaponClass === "bow" || item.twoHand;
+    const wornIsBow = !!(wornWep && (wornWep.weaponClass === "bow" || wornWep.twoHand));
+    const isShield = item.type === "shield" || item.slot === "shield" || slotId === "shield";
+    if (isBow && (equip.shield || slotId === "weapon" && equip.shield)) {
+      return { ok: false, reason: "ธนูสองมือ ใส่โล่ไม่ได้" };
+    }
+    if (isShield && wornIsBow) {
+      return { ok: false, reason: "ธนูสองมือ ใส่โล่ไม่ได้" };
+    }
+    return null;
+  };
+
   PVE.canEquipItem = function (save, itemId) {
     const item = DATA.ITEMS[itemId];
     if (!item) return false;
@@ -801,6 +913,8 @@
     if (!item || item.type !== slot.type) return { ok: false, reason: "ชนิดไม่ตรงช่อง" };
     if (!save.owned[itemId]) return { ok: false, reason: "ยังไม่ได้ซื้อ" };
     if (!PVE.canEquipItem(save, itemId)) return { ok: false, reason: "อาชีพนี้ใส่ไม่ได้" };
+    const twoHandBlock = PVE.twoHandConflict(save, slotId, item);
+    if (twoHandBlock) return twoHandBlock;
     save.equip[slotId] = itemId;
     PVE.syncVitals(save);
     return { ok: true };
