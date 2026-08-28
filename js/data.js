@@ -145,7 +145,7 @@
       mpRegen: 2,
       dodge: 0,
       accuracy: 100,
-      skills: ["attack", "magifireblade", "guard", "heal"],
+      skills: ["bash","magnum_break","provoke","endure","sword_mastery","twohand_mastery","increase_hp_recovery"],
     },
     assassin: {
       id: "assassin",
@@ -167,7 +167,7 @@
       mpRegen: 2,
       dodge: 0,
       accuracy: 100,
-      skills: ["stab", "shadowkill", "veil", "counter"],
+      skills: ["double_attack","improve_dodge","steal","hiding","envenom","detoxify"],
     },
     hunter: {
       id: "hunter",
@@ -189,7 +189,7 @@
       mpRegen: 2,
       dodge: 0,
       accuracy: 100,
-      skills: ["arrowshot", "powershot", "focus", "soularrow", "double_strafe", "arrow_shower", "arrow_repel", "owl_eye", "vulture_eye", "improve_concentration"],
+      skills: ["owl_eye","vulture_eye","double_strafe","arrow_shower","improve_concentration","arrow_repel"],
     },
   };
 
@@ -442,7 +442,7 @@
       type: "attack",
       bowSkill: true,
       knockback: 6,
-      maxRank: 10,
+      maxRank: 1,
       button: "ดีดศร — 150% ATK ดีด 6 ช่อง | SP 15",
     },
     owl_eye: {
@@ -465,7 +465,7 @@
       mp: 0,
       type: "passive",
       maxRank: 10,
-      button: "ตาแร้ง — HIT +Lv และระยะธนู +Lv (ติดตัว)",
+      button: "ตาแร้ง — HIT +Lv และระยะธนู +floor(Lv/2) ช่อง (ติดตัว)",
     },
     improve_concentration: {
       id: "improve_concentration",
@@ -473,10 +473,158 @@
       name: "สมาธิ",
       hero: "hunter",
       cd: 0,
-      mp: 20,
+      mp: 25,
       type: "self",
       maxRank: 10,
-      button: "สมาธิ — AGI/DEX +(2+Lv)% นาน (40+20Lv) วินาที เปิดเผย 3×3",
+      button: "สมาธิ — AGI/DEX +(2+Lv)% นาน (40+20Lv) วินาที เปิดเผย 3×3 | SP 25",
+    },
+
+    sword_mastery: {
+      id: "sword_mastery",
+      icon: "assets/skills/attack.png",
+      name: "ความชำนาญดาบ",
+      hero: "warrior",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "ความชำนาญดาบ — Weapon ATK +4 ต่อเลเวล (ดาบมือเดียว)",
+    },
+    twohand_mastery: {
+      id: "twohand_mastery",
+      icon: "assets/skills/blade_storm.png",
+      name: "ความชำนาญดาบสองมือ",
+      hero: "warrior",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "ความชำนาญดาบสองมือ — Weapon ATK +4 ต่อเลเวล (ดาบสองมือ)",
+    },
+    increase_hp_recovery: {
+      id: "increase_hp_recovery",
+      icon: "assets/skills/heal.png",
+      name: "ฟื้นฟู HP",
+      hero: "warrior",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "ฟื้นฟู HP — ฟื้น HP เพิ่มตามเลเวลสกิล (ติดตัว)",
+    },
+    bash: {
+      id: "bash",
+      icon: "assets/skills/attack.png",
+      name: "แบช",
+      hero: "warrior",
+      cd: 0,
+      mp: 8,
+      type: "attack",
+      afterCastMs: 500,
+      maxRank: 10,
+      button: "แบช — ดาเมจ 130–400% ATK | After-cast 0.5s | SP 8",
+    },
+    magnum_break: {
+      id: "magnum_break",
+      icon: "assets/skills/magifireblade.png",
+      name: "แมกนัมเบรก",
+      hero: "warrior",
+      cd: 0,
+      mp: 30,
+      type: "attack",
+      afterCastMs: 2000,
+      knockback: 2,
+      maxRank: 10,
+      button: "แมกนัมเบรก — ไฟ 120–300% ATK AoE ดีด 2 ช่อง | After-cast 2s | SP 30",
+    },
+    provoke: {
+      id: "provoke",
+      icon: "assets/skills/guard.png",
+      name: "ยั่วยุ",
+      hero: "warrior",
+      cd: 0,
+      mp: 15,
+      type: "attack",
+      range: 9,
+      maxRank: 10,
+      button: "ยั่วยุ — −DEF / +ATK เป้าหมาย นาน 30 วินาที | ระยะ 9 | SP 15",
+    },
+    endure: {
+      id: "endure",
+      icon: "assets/skills/guard.png",
+      name: "เอนเดอร์",
+      hero: "warrior",
+      cd: 0,
+      mp: 10,
+      type: "self",
+      maxRank: 10,
+      button: "เอนเดอร์ — +MDEF ตามเลเวล, ทน 7 ฮิตไม่วูบ นาน 10 วินาที | SP 10",
+    },
+    double_attack: {
+      id: "double_attack",
+      icon: "assets/skills/stab.png",
+      name: "โจมตีสองครั้ง",
+      hero: "assassin",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "โจมตีสองครั้ง — โอกาส 5%×Lv โจมตีซ้ำ 100% ATK (มีดสั้น)",
+    },
+    improve_dodge: {
+      id: "improve_dodge",
+      icon: "assets/skills/veil.png",
+      name: "เพิ่มการหลบ",
+      hero: "assassin",
+      cd: 0,
+      mp: 0,
+      type: "passive",
+      maxRank: 10,
+      button: "เพิ่มการหลบ — FLEE +3 ต่อเลเวล (ติดตัว)",
+    },
+    steal: {
+      id: "steal",
+      icon: "assets/skills/counter.png",
+      name: "ขโมย",
+      hero: "assassin",
+      cd: 0,
+      mp: 10,
+      type: "attack",
+      maxRank: 10,
+      button: "ขโมย — ขโมย Zeno หรือดรอปจากมอนสนาม | SP 10",
+    },
+    hiding: {
+      id: "hiding",
+      icon: "assets/skills/veil.png",
+      name: "ซ่อน",
+      hero: "assassin",
+      cd: 0,
+      mp: 10,
+      type: "self",
+      maxRank: 10,
+      button: "ซ่อน — ซ่อนตัว มอนไม่จ้อง / เสีย SP ตามเลเวล | SP 10",
+    },
+    envenom: {
+      id: "envenom",
+      icon: "assets/skills/stab.png",
+      name: "ทาพิษ",
+      hero: "assassin",
+      cd: 0,
+      mp: 15,
+      type: "attack",
+      maxRank: 10,
+      button: "ทาพิษ — 100% ATK + 15×Lv และโอกาสติดพิษ | SP 15",
+    },
+    detoxify: {
+      id: "detoxify",
+      icon: "assets/skills/heal.png",
+      name: "ถอนพิษ",
+      hero: "assassin",
+      cd: 0,
+      mp: 10,
+      type: "self",
+      maxRank: 1,
+      button: "ถอนพิษ — ล้างพิษบนตัวเอง | SP 10",
     },
   };
 
@@ -1320,6 +1468,7 @@
     weapon_short: { id: "weapon_short", weight: 50, type: "weapon", name: "ดาบสั้นฝึกซ้อม", price: 200, weaponClass: "sword", weaponAtk: 70, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
     weapon_long: { id: "weapon_long", weight: 70, type: "weapon", name: "ดาบยาว", price: 600, weaponClass: "sword", weaponAtk: 120, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
     weapon_void: { id: "weapon_void", weight: 100, type: "weapon", name: "ดาบราชัน", price: 1500, weaponClass: "sword", weaponAtk: 200, weaponMatk: 0, reqLevel: 35, element: "none", jobs: DATA.JOB_SWORD, bonuses: {}, tier: "high" },
+    weapon_claymore: { id: "weapon_claymore", weight: 120, type: "weapon", name: "ดาบสองมือ", price: 800, weaponClass: "sword", weaponAtk: 140, twoHand: true, reqLevel: 12, element: "none", jobs: DATA.JOB_SWORD, bonuses: {} },
     weapon_knife: { id: "weapon_knife", weight: 40, type: "weapon", name: "มีดสั้นฝึก", price: 180, weaponClass: "dagger", weaponAtk: 40, weaponMatk: 0, reqLevel: 1, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
     weapon_dirk: { id: "weapon_dirk", weight: 50, type: "weapon", name: "กริช", price: 500, weaponClass: "dagger", weaponAtk: 75, weaponMatk: 0, reqLevel: 12, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {} },
     weapon_shadow: { id: "weapon_shadow", weight: 60, type: "weapon", name: "กริชเงา", price: 1200, weaponClass: "dagger", weaponAtk: 120, weaponMatk: 0, reqLevel: 30, element: "none", jobs: DATA.JOB_DAGGER, bonuses: {}, tier: "high" },
@@ -1376,7 +1525,8 @@
     if (!DATA.ITEMS_BY_TYPE[it.type]) DATA.ITEMS_BY_TYPE[it.type] = [];
     DATA.ITEMS_BY_TYPE[it.type].push(it);
   });
-  DATA.AMMO_ORDER = ["arrow", "arrow_steel", "arrow_oridecon"];
+  DATA.AMMO_ORDER = [];
+  DATA.ARROWS_IN_SHOP = false;
 
   /* Refine: wearables grant Hard DEF/MDEF; weapon grants ATK/MATK (assumed +8/+8). */
   DATA.HARD_PER_REFINE = 0.7;
@@ -1448,6 +1598,21 @@
     return id;
   };
 
+  DATA.sellZeno = function (price) {
+    var p = Math.floor(Number(price) || 0);
+    if (p < 1) return 0;
+    return Math.max(1, Math.floor(p / 2));
+  };
+  DATA.buyPriceOf = function (id) {
+    var pot = DATA.POTIONS && DATA.POTIONS[id];
+    if (pot) return Number(pot.price) || 0;
+    var it = DATA.ITEMS && DATA.ITEMS[id];
+    if (it) return Number(it.price) || 0;
+    var mat = DATA.MATERIALS && DATA.MATERIALS[id];
+    if (mat) return Number(mat.price) || 0;
+    return 0;
+  };
+
   DATA.activePotionAspdMod = function (buffs, now) {
     now = now != null ? now : Date.now();
     buffs = buffs || {};
@@ -1462,31 +1627,26 @@
 
   DATA.SKILL_TREES = {
     warrior: [
-      { id: "attack", requires: [] },
-      { id: "guard", requires: [] },
-      { id: "magifireblade", requires: [{ id: "attack", min: 2 }] },
-      { id: "heal", requires: [{ id: "guard", min: 2 }] },
-      { id: "blade_storm", requires: [{ id: "attack", min: 3 }, { id: "magifireblade", min: 2 }] },
-      { id: "sanctuary", requires: [{ id: "heal", min: 2 }, { id: "guard", min: 3 }] },
+      { id: "sword_mastery", requires: [] },
+      { id: "twohand_mastery", requires: [{ id: "sword_mastery", min: 1 }] },
+      { id: "increase_hp_recovery", requires: [] },
+      { id: "bash", requires: [] },
+      { id: "magnum_break", requires: [{ id: "bash", min: 5 }] },
+      { id: "provoke", requires: [] },
+      { id: "endure", requires: [{ id: "provoke", min: 5 }] },
     ],
     assassin: [
-      { id: "stab", requires: [] },
-      { id: "veil", requires: [] },
-      { id: "shadowkill", requires: [{ id: "stab", min: 2 }] },
-      { id: "counter", requires: [{ id: "veil", min: 2 }] },
-      { id: "nightfall", requires: [{ id: "stab", min: 3 }, { id: "shadowkill", min: 2 }] },
-      { id: "phantom", requires: [{ id: "veil", min: 3 }, { id: "counter", min: 2 }] },
+      { id: "double_attack", requires: [] },
+      { id: "improve_dodge", requires: [] },
+      { id: "steal", requires: [] },
+      { id: "hiding", requires: [{ id: "steal", min: 5 }] },
+      { id: "envenom", requires: [] },
+      { id: "detoxify", requires: [{ id: "envenom", min: 3 }] },
     ],
     hunter: [
-      { id: "arrowshot", requires: [] },
-      { id: "focus", requires: [] },
-      { id: "powershot", requires: [{ id: "arrowshot", min: 2 }] },
-      { id: "soularrow", requires: [{ id: "focus", min: 2 }] },
-      { id: "rain", requires: [{ id: "arrowshot", min: 3 }, { id: "powershot", min: 2 }] },
-      { id: "mark", requires: [{ id: "focus", min: 3 }, { id: "soularrow", min: 2 }] },
       { id: "owl_eye", requires: [] },
-      { id: "vulture_eye", requires: [{ id: "owl_eye", min: 1 }] },
-      { id: "double_strafe", requires: [{ id: "vulture_eye", min: 1 }] },
+      { id: "vulture_eye", requires: [{ id: "owl_eye", min: 3 }] },
+      { id: "double_strafe", requires: [{ id: "vulture_eye", min: 10 }] },
       { id: "arrow_shower", requires: [{ id: "double_strafe", min: 5 }] },
       { id: "improve_concentration", requires: [] },
       { id: "arrow_repel", requires: [{ id: "improve_concentration", min: 1 }] },
@@ -1494,23 +1654,25 @@
   };
 
   DATA.SKILL_ROOTS = {
-    warrior: ["attack", "guard"],
-    assassin: ["stab", "veil"],
-    hunter: ["arrowshot", "focus"],
+    warrior: ["bash", "provoke"],
+    assassin: ["double_attack", "steal"],
+    hunter: ["owl_eye", "improve_concentration"],
   };
 
   DATA.SKILL_BRANCHES = {
     warrior: [
-      ["attack", "magifireblade", "blade_storm"],
-      ["guard", "heal", "sanctuary"],
+      ["sword_mastery", "twohand_mastery"],
+      ["increase_hp_recovery"],
+      ["bash", "magnum_break"],
+      ["provoke", "endure"],
     ],
     assassin: [
-      ["stab", "shadowkill", "nightfall"],
-      ["veil", "counter", "phantom"],
+      ["double_attack"],
+      ["improve_dodge"],
+      ["steal", "hiding"],
+      ["envenom", "detoxify"],
     ],
     hunter: [
-      ["arrowshot", "powershot", "rain"],
-      ["focus", "soularrow", "mark"],
       ["owl_eye", "vulture_eye", "double_strafe", "arrow_shower"],
       ["improve_concentration", "arrow_repel"],
     ],

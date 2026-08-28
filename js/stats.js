@@ -315,11 +315,15 @@
     return 0.05 * (Number(weaponLevel) || 1) * (Number(baseWeaponAtk) || 0);
   };
 
-  STATS.bowVariance = function (weaponLevel, baseWeaponAtk, mode) {
+  STATS.bowVariance = function (weaponLevel, baseWeaponAtk, mode, rng) {
     const amp = STATS.bowVarianceAmp(weaponLevel, baseWeaponAtk);
     if (mode === "min") return -amp;
     if (mode === "max") return amp;
     if (mode === "mid" || mode == null || mode === "") return 0;
+    if (mode === "roll") {
+      const t = rng && typeof rng.next === "function" ? rng.next() : Math.random();
+      return -amp + t * (2 * amp);
+    }
     if (typeof mode === "number" && isFinite(mode)) return mode;
     return 0;
   };
@@ -361,7 +365,7 @@
   };
 
   STATS.vultureEyeRange = function (lv) {
-    return Math.max(0, Math.floor(Number(lv) || 0));
+    return Math.floor(Math.max(0, Number(lv) || 0) / 2);
   };
 
   STATS.improveConcentrationPct = function (lv) {
@@ -372,6 +376,67 @@
   STATS.improveConcentrationDuration = function (lv) {
     lv = Math.max(0, Math.floor(Number(lv) || 0));
     return 40 + 20 * lv;
+  };
+
+  STATS.swordMasteryAtk = function (lv) {
+    return 4 * Math.max(0, Math.floor(Number(lv) || 0));
+  };
+  STATS.twohandMasteryAtk = function (lv) {
+    return 4 * Math.max(0, Math.floor(Number(lv) || 0));
+  };
+  STATS.increaseHpRecovery = function (lv, maxHp) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return Math.floor(((Number(maxHp) || 0) / 500 + 5) * lv / 10);
+  };
+  STATS.improveDodgeFlee = function (lv) {
+    return 3 * Math.max(0, Math.floor(Number(lv) || 0));
+  };
+  STATS.bashMod = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return (100 + 30 * lv) / 100;
+  };
+  STATS.magnumBreakMod = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return (100 + 20 * lv) / 100;
+  };
+  STATS.provokeDefReduce = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return 0.05 + 0.05 * lv;
+  };
+  STATS.provokeAtkBonus = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return 0.02 + 0.03 * lv;
+  };
+  STATS.provokeSuccess = function (lv, dex, luk) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    const raw = 50 + 5 * lv + Math.floor(((Number(dex) || 0) + (Number(luk) || 0)) / 10);
+    if (raw < 5) return 5;
+    if (raw > 95) return 95;
+    return raw;
+  };
+  STATS.doubleAttackChance = function (lv) {
+    return 0.05 * Math.max(0, Math.floor(Number(lv) || 0));
+  };
+  STATS.envenomBonus = function (lv) {
+    return 15 * Math.max(0, Math.floor(Number(lv) || 0));
+  };
+  STATS.envenomPoisonChance = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return (10 + 4 * lv) / 100;
+  };
+  STATS.stealSuccess = function (lv, dex) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    const raw = 10 * lv + Math.floor((Number(dex) || 0) / 5);
+    if (raw < 5) return 5;
+    if (raw > 95) return 95;
+    return raw;
+  };
+  STATS.endureMdef = function (lv) {
+    return Math.max(0, Math.floor(Number(lv) || 0));
+  };
+  STATS.hidingSpIntervalSec = function (lv) {
+    lv = Math.max(0, Math.floor(Number(lv) || 0));
+    return 10 - lv + 1;
   };
 
   STATS.weaponItem = function (equipOrId) {
@@ -390,24 +455,6 @@
   };
 
   STATS.arrowAtkFrom = function (unitOrSave) {
-    if (!unitOrSave) return 0;
-    if (unitOrSave.arrowAtk != null) return Number(unitOrSave.arrowAtk) || 0;
-    const ammo = unitOrSave.ammo;
-    if (ammo) {
-      if (ammo.arrowAtk != null) return Number(ammo.arrowAtk) || 0;
-      if (ammo.id && DATA.ITEMS && DATA.ITEMS[ammo.id] && DATA.ITEMS[ammo.id].arrowAtk != null) {
-        return Number(DATA.ITEMS[ammo.id].arrowAtk) || 0;
-      }
-      const ammoItem = ammo.item;
-      if (ammoItem && ammoItem.arrowAtk != null) return Number(ammoItem.arrowAtk) || 0;
-    }
-    const equip = unitOrSave.equip;
-    if (equip && equip.ammo && DATA.ITEMS && DATA.ITEMS[equip.ammo] && DATA.ITEMS[equip.ammo].arrowAtk != null) {
-      return Number(DATA.ITEMS[equip.ammo].arrowAtk) || 0;
-    }
-    if (unitOrSave.arrow && DATA.ITEMS && DATA.ITEMS[unitOrSave.arrow] && DATA.ITEMS[unitOrSave.arrow].arrowAtk != null) {
-      return Number(DATA.ITEMS[unitOrSave.arrow].arrowAtk) || 0;
-    }
     return 0;
   };
 
@@ -485,7 +532,7 @@
     const refineBonus = STATS.bowRefineBonus(wlv, plus);
 
     function pack(varMode) {
-      const variance = STATS.bowVariance(wlv, baseWeapon, varMode);
+      const variance = STATS.bowVariance(wlv, baseWeapon, varMode, opts.rng);
       const weaponAtk = Math.floor((baseWeapon + variance + statBonus + refineBonus + overUpgrade) * sizePen);
       const extraAtk = equipAtk + consumableAtk + arrowAtk + pseudoBuffAtk;
       let groupA = 0;
@@ -676,6 +723,19 @@
     const wep = wepId && DATA.ITEMS[wepId];
     stats.weaponClass = wep && wep.weaponClass;
     stats.twoHand = !!(wep && (wep.twoHand || wep.weaponClass === "bow"));
+    let masteryAtk = 0;
+    if (wep && wep.weaponClass === "sword") {
+      if (wep.twoHand) masteryAtk = STATS.twohandMasteryAtk(skillRanks.twohand_mastery);
+      else masteryAtk = STATS.swordMasteryAtk(skillRanks.sword_mastery);
+    }
+    stats.atk += masteryAtk;
+    stats.masteryAtk = masteryAtk;
+    const rec = STATS.increaseHpRecovery(skillRanks.increase_hp_recovery, stats.maxHp);
+    stats.hpRegen += rec;
+    stats.increaseHpRecovery = rec;
+    const dodgeFlee = STATS.improveDodgeFlee(skillRanks.improve_dodge);
+    stats.fleeSkillBonus = (stats.fleeSkillBonus || 0) + dodgeFlee;
+    stats.improveDodgeFlee = dodgeFlee;
     if (wep && wep.weaponClass === "bow") {
       const bowDex = (totalPts.dex || 0) + owlDex;
       const bow = STATS.computeBowAtk({
@@ -687,7 +747,7 @@
         baseWeaponAtk: Number(wep.weaponAtk) || 0,
         weaponLevel: wep.weaponLevel || 1,
         refine: STATS.refineOf(refine, wepId),
-        arrowAtk: extra.arrowAtk != null ? Number(extra.arrowAtk) || 0 : STATS.arrowAtkFrom(extra),
+        arrowAtk: 0,
         equipAtk: fromEq.atk || 0,
         variance: "mid",
         size: extra.size || "M",

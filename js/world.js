@@ -97,8 +97,8 @@
   function basicSkillOf(ent) {
     if (!ent || !ent.unit) return null;
     const hid = ent.unit.heroId;
-    if (hid === "warrior") return "attack";
-    if (hid === "assassin") return "stab";
+    if (hid === "warrior") return "bash";
+    if (hid === "assassin") return "envenom";
     if (hid === "hunter") return "arrowshot";
     const skills = ent.unit.skills || [];
     const basic = skills.find(function (id) {
@@ -113,12 +113,28 @@
     return DATA.SKILLS[skillId] || DATA.BOSS_SKILLS[skillId] || null;
   }
 
+  function bowRange(ent) {
+    const extra = (STATS && STATS.vultureEyeRange) ? STATS.vultureEyeRange(ent && ent.unit && ent.unit.skillRanks && ent.unit.skillRanks.vulture_eye) : 0;
+    return WORLD.HUNTER_RANGE + extra;
+  }
+
   function skillRange(ent, skillId) {
     const def = skillDef(ent, skillId);
-    if (!def || def.type === "self") return 99;
+    if (def && def.type === "passive") return 0;
+    if (def && def.type === "self") {
+      if (ent && ent.unit && ent.unit.heroId === "hunter") return 0;
+      return 99;
+    }
+    if (!def) return 99;
+    if (def.range != null) return Number(def.range) || 1;
+    if (skillId === "provoke") return 9;
+    if (skillId === "bash" || skillId === "magnum_break" || skillId === "envenom" || skillId === "steal") return 1;
+    if (skillId === "double_strafe" || skillId === "arrow_shower" || skillId === "arrow_repel") return bowRange(ent);
+    if (skillId === "arrowshot" || skillId === "powershot" || skillId === "soularrow" || skillId === "rain") {
+      return (ent && ent.unit && ent.unit.heroId === "hunter") ? bowRange(ent) : 10;
+    }
     if (ent && ent.unit && ent.unit.heroId === "hunter") {
-      const extra = (STATS && STATS.vultureEyeRange) ? STATS.vultureEyeRange(ent.unit.skillRanks && ent.unit.skillRanks.vulture_eye) : 0;
-      return WORLD.HUNTER_RANGE + extra;
+      return bowRange(ent);
     }
     if (ent && ent.unit && ent.unit.heroId === "warrior") return WORLD.WARRIOR_RANGE;
     return 1;
@@ -127,6 +143,11 @@
   WORLD.skillRange = skillRange;
 
   WORLD.knockback = function (ent, from, tiles) {
+    const unit = ent && ent.unit ? ent.unit : ent;
+    if (unit && unit.endureHits > 0 && COMBAT.buffActive && COMBAT.buffActive(unit.endureUntil)) {
+      unit.endureHits -= 1;
+      return { dx: 0, dy: 0, x: ent.x, y: ent.y, endured: true };
+    }
     return COMBAT.knockbackTiles(ent, from, tiles, function (x, y) {
       return isWalkable(x, y);
     });
@@ -319,23 +340,40 @@
     if (!def) return false;
     if (!COMBAT.skillReady(atk.unit, skillId, def)) return false;
     if (!inSkillRange(atk, defn, skillId)) return false;
-    const bowSkill = def.bowSkill || skillId === "double_strafe" || skillId === "arrow_shower" || skillId === "arrow_repel";
-    if (bowSkill && STATS.holdsBow(atk.unit) && !COMBAT.hasBowAmmoForCombat(atk.unit, S && S.save)) {
-      if (atk.kind === "player") toast("ไม่มีลูกธนู");
-      return false;
-    }
     atk.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(defn.x - atk.x, defn.y - atk.y) : "s";
     if (atk.unit) atk.unit.facing = atk.facing;
     if (atk.kind === "player" && S.save) S.save.facing = atk.facing;
     const prevAtb = defn.unit.atb;
     const state = makePair(atk, defn);
+    if (skillId === "steal" && defn.kind !== "mob") {
+      if (state._restore) state._restore();
+      toast("ขโมยไม่สำเร็จ");
+      COMBAT.spendAndCd(atk.unit, def);
+      return true;
+    }
     const r = COMBAT.executeSkill(state, atk.unit, skillId);
     COMBAT.normalizeCdsToMs(atk.unit);
     if (root.FX && FX.mapActor) FX.mapActor(S.hostEl, atk, defn, skillId, def);
     flushFx(state, atk, defn);
     if (state._restore) state._restore();
     if (!r || !r.ok) return false;
-    atk.atkReadyAt = nowMs() + COMBAT.attackIntervalMs(atk.unit);
+    if (skillId === "magnum_break" && S && S.entities) {
+      const lv = COMBAT.rankOf(atk.unit, "magnum_break");
+      const mod = STATS.magnumBreakMod(lv);
+      S.entities.forEach(function (e) {
+        if (!e || e.dead || e === defn || e === atk) return;
+        if (e.kind === "player") return;
+        if (chebyshev(atk, e) > 1) return;
+        const st = makePair(atk, e);
+        const hit = COMBAT.doHitAttack(st, atk.unit, e.unit, def.name, mod, 0);
+        if (hit && hit.hit) WORLD.knockback(e, atk, 2);
+        flushFx(st, atk, e);
+        if (st._restore) st._restore();
+        if (e.unit && e.unit.hp <= 0) onDeath(e, atk);
+      });
+    }
+    const after = Number(def.afterCastMs) || 0;
+    atk.atkReadyAt = nowMs() + COMBAT.attackIntervalMs(atk.unit) + after;
     if (defn.unit.atb === 0 && prevAtb > 0) {
       defn.atkReadyAt = nowMs() + COMBAT.attackIntervalMs(defn.unit);
     }
@@ -436,10 +474,17 @@
     if (!S) return { x: 0, y: 0 };
     if (S.mode === "arena") return { x: S.player.x, y: S.player.y };
     if (MAP && MAP.getPos) {
-      const p = MAP.getPos();
-      S.player.x = p.x;
-      S.player.y = p.y;
-      return p;
+      let p = null;
+      try {
+        p = MAP.getPos();
+      } catch (err) {
+        p = null;
+      }
+      if (p && p.x != null && p.y != null) {
+        S.player.x = p.x;
+        S.player.y = p.y;
+        return p;
+      }
     }
     return { x: S.player.x, y: S.player.y };
   }
@@ -462,15 +507,39 @@
       foe = S.player;
     }
     if (!foe || foe.dead) return;
+    if (foe.unit && foe.unit.hidden) return;
     const sid = basicSkillOf(ent);
     if (!sid) return;
     if (!inSkillRange(ent, foe, sid)) return;
     if (ent.kind !== "player" && !ent.aggro && chebyshev(ent, foe) > 1) return;
-    if (ent.kind === "player" && STATS.holdsBow(ent.unit)) {
-      if (!COMBAT.hasBowAmmoForCombat(ent.unit, S && S.save)) {
-        toast("ไม่มีลูกธนู");
+    if (ent.kind === "player" && !(STATS.holdsBow && STATS.holdsBow(ent.unit))) {
+      if (playerWeightOver()) {
+        toastWeightOverAtk();
         return;
       }
+      if (!inSkillRange(ent, foe, sid)) return;
+      if (COMBAT.breakHide) COMBAT.breakHide(ent.unit);
+      ent.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(foe.x - ent.x, foe.y - ent.y) : "s";
+      if (ent.unit) ent.unit.facing = ent.facing;
+      if (S.save) S.save.facing = ent.facing;
+      const state = makePair(ent, foe);
+      COMBAT.emitFx(state, { kind: "act", side: ent.unit.side, skillId: sid || "attack", anim: "attack" });
+      COMBAT.doHitAttack(state, ent.unit, foe.unit, "โจมตี", 1, 0, { auto: true });
+      COMBAT.normalizeCdsToMs(ent.unit);
+      if (root.FX && FX.mapActor) FX.mapActor(S.hostEl, ent, foe, sid, skillDef(ent, sid));
+      flushFx(state, ent, foe);
+      if (state._restore) state._restore();
+      ent.atkReadyAt = nowMs() + COMBAT.attackIntervalMs(ent.unit);
+      if (foe.kind !== "player") foe.aggro = true;
+      S.targetId = foe.id;
+      if (foe.unit.hp <= 0) onDeath(foe, ent);
+      if (!S || S.ending) return;
+      if (ent.unit.hp <= 0) onDeath(ent, foe);
+      if (!S || S.ending) return;
+      syncPlayerSave();
+      return;
+    }
+    if (ent.kind === "player" && STATS.holdsBow(ent.unit)) {
       if (playerWeightOver()) {
         toastWeightOverAtk();
         return;
@@ -481,7 +550,7 @@
       if (S.save) S.save.facing = ent.facing;
       const state = makePair(ent, foe);
       COMBAT.emitFx(state, { kind: "act", side: ent.unit.side, skillId: "bow_attack", anim: "attack" });
-      COMBAT.doBowHit(state, ent.unit, foe.unit, "ยิงธนู", { variance: "mid" });
+      COMBAT.doBowHit(state, ent.unit, foe.unit, "ยิงธนู");
       COMBAT.normalizeCdsToMs(ent.unit);
       if (root.FX && FX.mapActor) FX.mapActor(S.hostEl, ent, foe, sid, skillDef(ent, sid));
       flushFx(state, ent, foe);
@@ -562,6 +631,10 @@
     if (ent.kind === "player" || ent.dead) return;
     const p = S.player;
     if (!p || p.dead) return;
+    if (p.unit && p.unit.hidden) {
+      ent.aggro = false;
+      return;
+    }
     if (S.mode === "arena") {
       ent.aggro = true;
       if (chebyshev(ent, p) > 1) stepToward(ent, p.x, p.y);
@@ -600,6 +673,42 @@
     ent.unit.mp = ent.unit.maxMp;
   }
 
+
+  const LIVE_FIGHT_KEYS = [
+    "atb", "sitting", "facing",
+    "concPct", "concSec", "concTurns", "concDex", "concAgi", "concReveal", "improveConcentration",
+    "berserk", "berserkTurns",
+    "weakenTurns",
+    "guard", "guardCritPending", "guardDR",
+    "counter", "counterDR",
+    "veilTurns", "veilDodge", "veilHealPct",
+    "focusTurns", "focusAcc", "focusAtk", "focusAspeed", "focusCrit",
+    "stoneShield", "stoneShieldTurns",
+    "fogTurns", "fogDodge",
+    "rageTurns", "rageAtk", "rageCrit",
+    "curseTurns", "curseAtk", "curseCrit", "curseCritMult",
+    "dragonStacks",
+    "nextAtkBonus",
+    "phantomTurns", "phantomDodge",
+    "markTurns", "markCrit", "markAcc",
+    "angelVeilTurns", "angelDodge", "angelCrit",
+    "sanctuary", "sanctuaryDR",
+    "wrathTurns", "wrathAtk", "wrathCrit", "wrathCritMult",
+    "magnumFireUntil", "magnumFireAtk",
+    "provokedUntil", "provokeDefMul", "provokeAtkMul",
+    "endureUntil", "endureHits", "endureMdef",
+    "hidden", "hidingUntil",
+  ];
+
+  function copyLiveFightState(old, next) {
+    if (!old || !next) return;
+    next.cds = old.cds && typeof old.cds === "object" ? Object.assign({}, old.cds) : {};
+    next.poisons = Array.isArray(old.poisons) ? old.poisons.slice() : [];
+    LIVE_FIGHT_KEYS.forEach(function (k) {
+      if (old[k] !== undefined) next[k] = old[k];
+    });
+  }
+
   /* Sit regen = 2× stand (hpRegen/mpRegen per second while sitting). */
   WORLD.SIT_REGEN_MULT = 2;
 
@@ -611,8 +720,17 @@
     if (S.hostEl) {
       const av = S.hostEl.querySelector(".map-avatar");
       if (av) av.classList.toggle("sitting", !!on);
+      const img = av && (av.querySelector("img.map-sprite") || av.querySelector("img"));
+      if (img && root.FX && FX.spriteSrc) {
+        const hid = (S.player.unit && S.player.unit.heroId) || (S.save && S.save.heroId) || "warrior";
+        img.src = FX.spriteSrc(hid, S.player.unit || S.player);
+      }
     }
   }
+
+  WORLD.setSitting = function (on) { setPlayerSitting(!!on); return !!(S && S.player && S.player.sitting); };
+  WORLD.toggleSit = function () { return WORLD.setSitting(!(S && S.player && S.player.sitting)); };
+  WORLD.isSitting = function () { return !!(S && S.player && S.player.sitting); };
 
   WORLD.applySitRegen = function (unit, dt) {
     if (!unit) return 0;
@@ -645,6 +763,7 @@
       if (learned.indexOf(id) < 0) continue;
       const def = DATA.SKILLS[id];
       if (!def) continue;
+      if (def.type === "passive") continue;
       if (!COMBAT.skillReady(unit, id, def)) continue;
       if (def.type === "self") return id;
       const ent = playerEnt.unit ? playerEnt : { x: playerEnt.x || 0, y: playerEnt.y || 0, unit: unit };
@@ -686,14 +805,22 @@
     if (p.sitting) setPlayerSitting(false);
     if (WORLD.isManual() || (MAP && MAP.isManual && MAP.isManual())) return;
     const tgt = WORLD.pickFarmTarget(p);
-    if (!tgt) return;
+    if (!tgt) {
+      toastFarmNoTarget();
+      return;
+    }
     if (WORLD.targetEntity() !== tgt) WORLD.setTarget(tgt.id);
     const sid = basicSkillOf(p);
     if (sid && inSkillRange(p, tgt, sid)) {
       if (MAP && MAP.stopWalking) MAP.stopWalking();
     } else {
-      if (MAP && MAP.isWalking && MAP.isWalking()) return;
-      if (MAP && MAP.walkToAdjacent) MAP.walkToAdjacent(playerPos(), tgt);
+      if (!farmEnsureWalk(tgt)) {
+        const skip = {};
+        skip[tgt.id] = true;
+        const alt = WORLD.pickFarmTarget(p, null, S.save, skip);
+        if (!alt || !farmEnsureWalk(alt)) toastFarmNoTarget();
+        else if (WORLD.targetEntity() !== alt) WORLD.setTarget(alt.id);
+      }
       return;
     }
     if (WORLD.tryFarmSkills(S.save, p, tgt)) return;
@@ -707,14 +834,81 @@
         return;
       }
     }
-    const dmg = (p.unit.skills || []).find(function (hid) {
-      const def = DATA.SKILLS[hid];
-      if (!def || def.type !== "attack") return false;
-      if ((def.cd || 0) === 0 && (def.mp || 0) === 0) return false;
-      return COMBAT.skillReady(p.unit, hid, def);
-    });
-    if (dmg) WORLD.cast(dmg, "left");
+    WORLD.tryFarmBasic(p);
   }
+
+  function toastFarmNoTarget() {
+    if (!WORLD._farmNoTgtAt || Date.now() - WORLD._farmNoTgtAt > 2500) {
+      WORLD._farmNoTgtAt = Date.now();
+      toast("ไม่มีมอนที่เลือกหรือเดินถึง");
+    }
+  }
+
+  function farmEnsureWalk(tgt) {
+    if (!tgt || !MAP) return false;
+    const cur = playerPos();
+    if (MAP.isWalking && MAP.isWalking()) {
+      if (!S._farmWalkAt || S._farmWalkAt.x !== cur.x || S._farmWalkAt.y !== cur.y) {
+        S._farmWalkAt = { x: cur.x, y: cur.y, t: nowMs() };
+        return true;
+      }
+      if (nowMs() - S._farmWalkAt.t < 800) return true;
+      if (MAP.stopWalking) MAP.stopWalking();
+      S._farmWalkAt = null;
+    }
+    if (!MAP.walkToAdjacent) return false;
+    const ok = MAP.walkToAdjacent(cur, tgt);
+    if (ok) S._farmWalkAt = { x: cur.x, y: cur.y, t: nowMs() };
+    return !!ok;
+  }
+
+  WORLD.tryFarmBasic = function (playerEnt) {
+    if (!S || !playerEnt) return false;
+    if (nowMs() < (playerEnt.atkReadyAt || 0)) return false;
+    const sid = basicSkillOf(playerEnt);
+    if (!sid) return false;
+    const def = skillDef(playerEnt, sid);
+    if (!def || !COMBAT.skillReady(playerEnt.unit, sid, def)) return false;
+    return WORLD.cast(sid, "left");
+  };
+
+
+  WORLD.kickAutoFarm = function () {
+    tickAutoFarm(0);
+  };
+
+  WORLD.syncLiveHero = function (save) {
+    if (!S || !S.player) return false;
+    save = save || S.save;
+    if (!save) return false;
+    S.save = save;
+    const old = S.player.unit;
+    const next = PVE.buildHeroUnit(save);
+    next.side = "left";
+    copyLiveFightState(old, next);
+    const wasSitting = !!(S.player.sitting || (old && old.sitting));
+    if (old) {
+      next.hp = Math.min(old.hp, next.maxHp);
+      next.mp = Math.min(old.mp, next.maxMp);
+      if (old.facing != null) {
+        next.facing = old.facing;
+        S.player.facing = old.facing;
+      }
+    }
+    COMBAT.clampHpMp(next);
+    S.player.unit = next;
+    setPlayerSitting(wasSitting);
+    paintHud(true);
+    if (
+      save.autoFarm &&
+      S.mode === "field" &&
+      !WORLD.isManual() &&
+      !(MAP && MAP.isManual && MAP.isManual())
+    ) {
+      WORLD.kickAutoFarm();
+    }
+    return true;
+  };
 
   function nearestLiving(from, kind) {
     let best = null;
@@ -731,7 +925,7 @@
     return best;
   }
 
-  WORLD.pickFarmTarget = function (player, ents, save) {
+  WORLD.pickFarmTarget = function (player, ents, save, skip) {
     if (!player) return null;
     const list = ents || (S && S.entities) || [];
     save = save || (S && S.save) || null;
@@ -743,6 +937,7 @@
     for (i = 0; i < list.length; i++) {
       const e = list[i];
       if (!e || e.dead || e.kind !== "mob") continue;
+      if (skip && (skip[e.id] || skip === e || skip === e.id)) continue;
       if (typeof PVE !== "undefined" && PVE.farmAllowsMob && !PVE.farmAllowsMob(save, e.monsterId)) continue;
       const cost = MAP && MAP.adjacentWalkCost ? MAP.adjacentWalkCost(player, e) : -1;
       if (cost < 0 || !isFinite(cost)) continue;
@@ -1116,7 +1311,13 @@
     const mode = save.mapId === "bosses" ? "bosses" : save.mapId === "field" ? "field" : null;
     if (!mode) return;
     PVE.syncVitals(save);
-    const pos = MAP && MAP.getPos ? MAP.getPos() : { x: 2, y: 7 };
+    let pos = { x: 2, y: 7 };
+    if (MAP && MAP.getPos) {
+      try {
+        const p = MAP.getPos();
+        if (p && p.x != null && p.y != null) pos = p;
+      } catch (err) {}
+    }
     S = {
       mode: mode,
       save: save,

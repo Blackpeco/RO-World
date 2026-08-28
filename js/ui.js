@@ -539,8 +539,10 @@
           .map(function (it) {
             const owned = !!save.owned[it.id];
             const can = save.zeno >= it.price;
+            const sellZ = DATA.sellZeno(it.price);
             const btn = owned
-              ? '<span class="owned-tag">เป็นเจ้าของแล้ว</span>'
+              ? '<span class="owned-tag">เป็นเจ้าของแล้ว</span>' +
+                '<button type="button" class="btn small sell" onclick="App.sellItem(\'' + it.id + "',1)\">ขาย " + sellZ + "</button>"
               : '<button type="button" class="btn small ' +
                 (can ? "gold" : "disabled") +
                 '" ' +
@@ -1456,6 +1458,7 @@
       '<button type="button" class="ro-btn" onclick="App.goCitySkills()">SKILL <small>K</small></button>' +
       '<button type="button" class="ro-btn" onclick="App.goCityStatus()">STATUS <small>C</small></button>' +
       '<button type="button" class="ro-btn" onclick="App.goFarm()">FARM</button>' +
+      '<button type="button" class="ro-btn" onclick="App.toggleSit()">SIT <small>N</small></button>' +
       '<button type="button" class="ro-btn" onclick="App.goInv()">INV <small>I</small></button>' +
       '<button type="button" class="ro-btn" onclick="App.goEquip()">สวมใส่ <small>E</small></button>' +
       '<button type="button" class="ro-btn" onclick="App.goShop()">ร้านอุปกรณ์ <small>R</small></button>' +
@@ -1538,33 +1541,7 @@
         '</div></div><div class="item-buy">' +
         '<button type="button" class="btn small ' + (can ? "gold" : "disabled") + '" ' +
         (can ? 'onclick="App.buyPotion(\'' + id + "')\"" : "disabled") +
-        ">ซื้อ " + it.price + " · " + DATA.itemWeight(it) + "g</button></div></div>"
-      );
-    }).join("");
-    const ammoIds = DATA.AMMO_ORDER || [];
-    const ammoRows = ammoIds.map(function (id) {
-      const it = DATA.ITEMS && DATA.ITEMS[id];
-      if (!it) return "";
-      const have = (save.ammo && save.ammo.id === id) ? STATS.arrowCountFrom(save) : 0;
-      const w1 = DATA.itemWeight(it);
-      const packPrice = (it.price || 0) * 100;
-      const canJob = PVE.isBowHero && PVE.isBowHero(save.heroId);
-      const lv = save.baseLevel || save.level || 1;
-      const canLv = !it.reqLevel || lv >= it.reqLevel;
-      const can1 = canJob && canLv && save.zeno >= it.price && PVE.canCarry(save, w1);
-      const can100 = canJob && canLv && save.zeno >= packPrice && PVE.canCarry(save, w1 * 100);
-      return (
-        '<div class="item-row"><div><b>🏹 ' + it.name +
-        '</b><div class="item-bon">Arrow ATK ' + (it.arrowAtk || 0) +
-        " · " + w1 + "g · มี " + have +
-        '</div></div><div class="item-buy">' +
-        '<button type="button" class="btn small ' + (can1 ? "gold" : "disabled") + '" ' +
-        (can1 ? 'onclick="App.buyAmmo(\'' + id + "',1)\"" : "disabled") +
-        ">ลูกธนู 1 · " + it.price + "</button>" +
-        '<button type="button" class="btn small ' + (can100 ? "gold" : "disabled") + '" ' +
-        (can100 ? 'onclick="App.buyAmmo(\'' + id + "',100)\"" : "disabled") +
-        ">แพ็ก 100 · " + packPrice + "</button>" +
-        "</div></div>"
+        ">ซื้อ " + it.price + " · " + DATA.itemWeight(it) + "g</button>" + (n > 0 ? UI.qtyStrip("qty-" + id, n) + UI.sellBtn(id, "App.qtyOf('qty-" + id + "'," + n + ")") : "") + "</div></div>"
       );
     }).join("");
     const nav = opts.overlay
@@ -1574,7 +1551,7 @@
       (opts.overlay ? "" : " <h2>ร้านยา พรอนเทรา</h2>") +
       '<div class="zeno-chip">เงินคงเหลือ <b>' + save.zeno + "</b> Zeno</div>" +
       '<p class="hint">ยาซ้อนจำนวนได้ · ใช้จากกระเป๋าบน HUD · Auto Farm จะดื่มยาแดง/ส้มเมื่อ HP ต่ำกว่า 40%</p>' +
-      '<div class="item-list">' + rows + ammoRows + "</div>" +
+      '<div class="item-list">' + rows + "</div>" +
       nav;
     if (opts.overlay) return inner;
     UI.setWalkMode(false);
@@ -1599,6 +1576,43 @@
       "</div></section>";
   };
 
+  UI.qtyStrip = function (id, max) {
+    max = Math.max(1, Math.floor(Number(max) || 1));
+    var ten = Math.min(10, max);
+    return (
+      '<span class="qty-strip" onclick="event.stopPropagation()">' +
+      '<button type="button" class="btn tiny" onclick="event.stopPropagation();var i=document.getElementById(\'' + id + '\');if(i)i.value=1;">1</button>' +
+      '<button type="button" class="btn tiny" onclick="event.stopPropagation();var i=document.getElementById(\'' + id + '\');if(i)i.value=' + ten + ';">10</button>' +
+      '<button type="button" class="btn tiny" onclick="event.stopPropagation();var i=document.getElementById(\'' + id + '\');if(i)i.value=' + max + ';">ทั้งหมด</button>' +
+      '<input type="number" id="' + id + '" min="1" max="' + max + '" value="1" style="width:2.4rem;font-size:0.75rem" onclick="event.stopPropagation()">' +
+      "</span>"
+    );
+  };
+
+  UI.sellBtn = function (id, qtyExpr, label) {
+    return '<button type="button" class="btn tiny sell" onclick="event.stopPropagation();App.sellItem(\'' +
+      id + "', " + qtyExpr + ')">' + (label || "ขาย") + "</button>";
+  };
+
+  UI.dropBtn = function (id, qtyExpr) {
+    return '<button type="button" class="btn tiny drop" onclick="event.stopPropagation();App.dropItem(\'' +
+      id + "'," + qtyExpr + ')">โยนทิ้ง</button>';
+  };
+
+  UI.stackActions = function (id, max, opts) {
+    opts = opts || {};
+    var city = opts.city !== false;
+    var gear = !!opts.gear;
+    var qid = opts.qtyId || ("qty-" + id);
+    var html = '<div class="inv-actions" onclick="event.stopPropagation()" style="display:flex;flex-wrap:wrap;gap:0.1rem;justify-content:center">';
+    if (!gear && max > 0) html += UI.qtyStrip(qid, max);
+    if (city && max > 0) html += UI.sellBtn(id, gear ? "1" : "App.qtyOf('" + qid + "'," + max + ")");
+    if (max > 0) html += UI.dropBtn(id, gear ? "1" : "App.qtyOf('" + qid + "'," + max + ")");
+    html += "</div>";
+    return html;
+  };
+
+
   UI._invTab = UI._invTab || "use";
 
   UI.slotTypeLabel = function (item) {
@@ -1618,7 +1632,10 @@
     var mobLabel = "ทุกตัว";
     if (cfg.mobNone) mobLabel = "0 ชนิด";
     else if (cfg.mobIds && cfg.mobIds.length) mobLabel = cfg.mobIds.length + " ชนิด";
-    var learned = PVE.learnedSkillIds(save);
+    var learned = PVE.learnedSkillIds(save).filter(function (id) {
+      var d = DATA.SKILLS[id];
+      return d && d.type !== "passive";
+    });
     var pal = learned.map(function (id) {
       var def = DATA.SKILLS[id] || {};
       var icon = def.icon || "";
@@ -1853,6 +1870,7 @@
   UI.invWin = function (save) {
     PVE.ensureProgress(save);
     var tab = UI._invTab || "use";
+    var inCity = !(PVE.inProntera) || PVE.inProntera(save);
     var ws = PVE.weightState(save);
     var wr = ws.ratio != null ? ws.ratio : (ws.max ? ws.cur / ws.max : 0);
     var wcls = wr >= 1 ? " full" : wr >= 0.9 ? " over" : wr >= 0.7 ? " heavy" : "";
@@ -1874,6 +1892,7 @@
         var remain = PVE.potionBuffRemainMs(save, id);
         var remainTxt = remain > 0 ? '<small class="inv-remain">เหลือ ' + PVE.fmtRemain(remain) + "</small>" : "";
         return (
+          '<div class="inv-cell">' +
           '<button type="button" class="ro-slot inv-slot' + (n ? "" : " empty") +
           '" data-id="' + UI.esc(id) + '" ' +
           (n ? 'onclick="App.usePotion(this.dataset.id)"' : "disabled") +
@@ -1883,21 +1902,24 @@
           "<small>×" + n + " · " + DATA.itemWeight(id) + "g</small>" +
           remainTxt +
           (n ? "<em>ใช้</em>" : "") +
-          "</button>"
+          "</button>" +
+          (n ? UI.stackActions(id, n, { city: inCity, qtyId: "qty-" + id }) : "") +
+          "</div>"
         );
       }).join("");
-      if (PVE.isBowHero && PVE.isBowHero(save.heroId)) {
-        const ammoId = save.ammo && save.ammo.id;
-        const it = ammoId && DATA.ITEMS[ammoId];
-        const n = STATS.arrowCountFrom(save);
-        const atk = STATS.arrowAtkFrom(save);
-        const name = (it && it.name) || "ลูกธนู";
-        grid =
-          '<div class="ro-slot inv-slot' + (n ? "" : " empty") + '">' +
-          '<span class="inv-emoji">🏹</span>' +
-          "<b>" + UI.esc(name) + "</b>" +
-          "<small>×" + n + (atk ? " · ATK " + atk : "") + "</small></div>" +
-          grid;
+      if (save.ammo && save.ammo.id && PVE.isBowHero && PVE.isBowHero(save.heroId)) {
+        var aid = save.ammo.id;
+        var ait = DATA.ITEMS && DATA.ITEMS[aid];
+        var an = PVE.stackCount ? PVE.stackCount(save, aid) : ((save.ammo && save.ammo.count) || 0);
+        if (ait) {
+          grid +=
+            '<div class="inv-cell">' +
+            '<div class="ro-slot inv-slot' + (an ? "" : " empty") + '">' +
+            "<b>" + UI.esc(ait.name) + "</b>" +
+            "<small>×" + an + " · " + DATA.itemWeight(aid) + "g</small></div>" +
+            (an ? UI.stackActions(aid, an, { city: inCity, qtyId: "qty-" + aid }) : "") +
+            "</div>";
+        }
       }
     } else if (tab === "equip") {
       var ownedIds = Object.keys(DATA.ITEMS).filter(function (id) { return save.owned && save.owned[id]; });
@@ -1909,13 +1931,16 @@
           var worn = (DATA.SLOTS || []).some(function (sl) { return save.equip && save.equip[sl.id] === id; });
           var slotName = UI.slotTypeLabel(it);
           return (
+            '<div class="inv-cell">' +
             '<button type="button" class="ro-slot inv-slot' + (worn ? " equipped" : "") +
             '" data-id="' + UI.esc(it.id) +
             '" onclick="App.toggleInvItem(this.dataset.id)">' +
             "<b>" + UI.esc(it.name) + "</b>" +
             "<small>" + UI.esc(slotName) + " · " + DATA.itemWeight(it) + "g</small>" +
             (worn ? '<em class="inv-badge on">ใส่อยู่</em>' : "") +
-            "</button>"
+            "</button>" +
+            UI.stackActions(id, 1, { city: inCity, gear: true }) +
+            "</div>"
           );
         }).join("");
       }
@@ -1933,10 +1958,13 @@
           var def = (DATA.MATERIALS && DATA.MATERIALS[id]) || { name: id, emoji: "◇" };
           var n = save.materials[id] || 0;
           return (
+            '<div class="inv-cell">' +
             '<div class="ro-slot inv-slot' + (n ? "" : " empty") + '">' +
             '<span class="inv-emoji">' + (def.emoji || "") + "</span>" +
             "<b>" + UI.esc(def.name) + "</b>" +
-            "<small>×" + n + " · " + DATA.itemWeight(id) + "g</small></div>"
+            "<small>×" + n + " · " + DATA.itemWeight(id) + "g</small></div>" +
+            (n ? UI.stackActions(id, n, { city: inCity, qtyId: "qty-mat-" + id }) : "") +
+            "</div>"
           );
         }).join("");
       }

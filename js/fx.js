@@ -188,7 +188,7 @@
     const facing = (unit && (unit.facing || unit.dir)) || (typeof MAP !== "undefined" && MAP.facing) || "s";
     const art = FX.facingArt(facing);
     if (unit && unit.sitting) {
-      return "assets/chars/" + hid + "_" + art.base + ".png";
+      return "assets/chars/" + hid + "_sit_" + art.base + ".png";
     }
     let dirPath = "assets/chars/" + hid + "_" + art.base + ".png";
     const wf = unit && (unit.walkFrame || unit.step);
@@ -277,6 +277,14 @@
     powershot: "#3d8b4a",
     focus: "#f0d36a",
     soularrow: "#7ec8e3",
+    bash: "#d4a017",
+    magnum_break: "#ff6a2a",
+    provoke: "#f0d36a",
+    endure: "#f0d36a",
+    steal: "#e74c3c",
+    envenom: "#c084fc",
+    hiding: "#8e44ad",
+    detoxify: "#3dde6a",
   };
 
   FX.mapActor = function (host, atk, defn, skillId, def) {
@@ -292,7 +300,9 @@
     if (defn && defn !== atk && !(def && def.type === "self")) {
       if (hid === "hunter" || skillId === "arrowshot" || skillId === "powershot" || skillId === "soularrow" || skillId === "rain") {
         FX.mapBolt(host, atk, defn, "arrow");
-      } else if (hid === "warrior" || skillId === "attack" || skillId === "magifireblade" || skillId === "blade_storm") {
+      } else if (hid === "warrior" || skillId === "attack" || skillId === "bash" || skillId === "magnum_break" || skillId === "magifireblade" || skillId === "blade_storm") {
+        FX.mapBolt(host, atk, defn, "slash");
+      } else if (hid === "assassin" || skillId === "envenom" || skillId === "steal" || skillId === "stab") {
         FX.mapBolt(host, atk, defn, "slash");
       }
     }

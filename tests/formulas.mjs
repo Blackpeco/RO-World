@@ -5,7 +5,7 @@ import vm from "vm";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
-const ctx = { console, Math, Date, Object, Array, Number, String, Boolean, Error };
+const ctx = { console, Math, Date, Object, Array, Number, String, Boolean, Error, setInterval, clearInterval, setTimeout, clearTimeout };
 vm.createContext(ctx);
 for (const f of ["data.js", "stats.js", "combat.js", "pve.js", "map.js", "world.js", "audio.js", "fx.js"]) {
   vm.runInContext(readFileSync(join(root, "js", f), "utf8"), ctx, { filename: f });
@@ -248,21 +248,113 @@ console.log("boss 6/7 + bonus points");
 console.log("skill unlock / cost helpers");
 {
   const roots = DATA.defaultSkillRanks("warrior");
-  assert(roots.attack === 1 && roots.guard === 1 && roots.magifireblade === 0, "free root rank 1");
-  assert(DATA.skillUnlocked("attack", roots, "warrior"), "root unlocked");
-  assert(!DATA.skillUnlocked("magifireblade", { attack: 1, guard: 1 }, "warrior"), "magifireblade locked at attack 1");
-  assert(DATA.skillUnlocked("magifireblade", { attack: 2, guard: 1 }, "warrior"), "magifireblade unlocked at attack 2");
-  assert(!DATA.skillUnlocked("blade_storm", { attack: 3, magifireblade: 1 }, "warrior"), "blade_storm needs magifireblade 2");
-  assert(DATA.skillUnlocked("blade_storm", { attack: 3, magifireblade: 2 }, "warrior"), "blade_storm unlocked");
+  assert(roots.bash === 1 && roots.provoke === 1 && roots.magnum_break === 0, "free root rank 1");
+  assert(DATA.skillUnlocked("bash", roots, "warrior"), "root unlocked");
+  assert(!DATA.skillUnlocked("magnum_break", { bash: 4, provoke: 1 }, "warrior"), "magnum locked until bash 5");
+  assert(DATA.skillUnlocked("magnum_break", { bash: 5, provoke: 1 }, "warrior"), "magnum unlocked at bash 5");
+  assert(!DATA.skillUnlocked("endure", { provoke: 4 }, "warrior"), "endure locked until provoke 5");
+  assert(DATA.skillUnlocked("endure", { provoke: 5 }, "warrior"), "endure unlocked");
   const sess = DATA.createSkillSession(DATA.defaultSkillRanks("warrior"), 4, "warrior");
   assert(DATA.skillSessionRemaining(sess) === 4, "start 4 unspent");
-  assert(DATA.skillAdd(sess, "attack"), "buy attack rank 2 costs 1");
-  assert(DATA.skillSessionRank(sess, "attack") === 2 && DATA.skillSessionRemaining(sess) === 3, "spent 1");
-  assert(DATA.skillAdd(sess, "magifireblade"), "unlock magifireblade after attack 2");
-  assert(!DATA.skillAdd(sess, "blade_storm"), "blade_storm still locked");
-  assert(DATA.skillSub(sess, "magifireblade"), "refund session rank");
-  assert(DATA.skillSessionRank(sess, "magifireblade") === 0 && DATA.skillSessionRemaining(sess) === 3, "refund restored point");
-  assert(!DATA.skillSub(sess, "guard"), "cannot refund locked free root");
+  assert(DATA.skillAdd(sess, "bash"), "buy bash rank 2 costs 1");
+  assert(DATA.skillSessionRank(sess, "bash") === 2 && DATA.skillSessionRemaining(sess) === 3, "spent 1");
+  assert(!DATA.skillAdd(sess, "magnum_break"), "magnum still locked");
+  assert(DATA.skillSub(sess, "bash"), "refund session rank");
+  assert(DATA.skillSessionRank(sess, "bash") === 1 && DATA.skillSessionRemaining(sess) === 4, "refund restored point");
+  assert(!DATA.skillSub(sess, "provoke"), "cannot refund locked free root");
+}
+
+
+console.log("swordsman thief trees");
+{
+  const wids = DATA.SKILL_TREES.warrior.map(function (n) { return n.id; });
+  ["bash", "magnum_break", "provoke", "endure", "sword_mastery", "twohand_mastery", "increase_hp_recovery"].forEach(function (id) {
+    assert(wids.indexOf(id) >= 0, "warrior tree has " + id);
+    assert(!!DATA.SKILLS[id], "DATA.SKILLS has " + id);
+  });
+  const aids = DATA.SKILL_TREES.assassin.map(function (n) { return n.id; });
+  ["double_attack", "improve_dodge", "steal", "hiding", "envenom", "detoxify"].forEach(function (id) {
+    assert(aids.indexOf(id) >= 0, "assassin tree has " + id);
+    assert(!!DATA.SKILLS[id], "DATA.SKILLS has " + id);
+  });
+  assert(!DATA.skillUnlocked("magnum_break", { bash: 4 }, "warrior"), "magnum locked until bash 5");
+  assert(DATA.skillUnlocked("magnum_break", { bash: 5 }, "warrior"), "magnum unlocked at bash 5");
+  assert(!DATA.skillUnlocked("endure", { provoke: 4 }, "warrior"), "endure locked until provoke 5");
+  assert(DATA.skillUnlocked("endure", { provoke: 5 }, "warrior"), "endure unlocked at provoke 5");
+  assert(!DATA.skillUnlocked("hiding", { steal: 4 }, "assassin"), "hiding locked until steal 5");
+  assert(DATA.skillUnlocked("hiding", { steal: 5 }, "assassin"), "hiding unlocked at steal 5");
+  assert(!DATA.skillUnlocked("detoxify", { envenom: 2 }, "assassin"), "detoxify locked until envenom 3");
+  assert(DATA.skillUnlocked("detoxify", { envenom: 3 }, "assassin"), "detoxify unlocked at envenom 3");
+  assert(!DATA.skillUnlocked("twohand_mastery", { sword_mastery: 0 }, "warrior"), "twohand locked until sword_mastery 1");
+  assert(DATA.skillUnlocked("twohand_mastery", { sword_mastery: 1 }, "warrior"), "twohand unlocked at sword_mastery 1");
+
+  const wr = DATA.defaultSkillRanks("warrior");
+  assert(wr.bash === 1 && wr.provoke === 1, "warrior roots bash+provoke=1");
+  ["magnum_break", "endure", "sword_mastery", "twohand_mastery", "increase_hp_recovery"].forEach(function (id) {
+    assert(wr[id] === 0, "warrior " + id + " default 0");
+  });
+  const ar = DATA.defaultSkillRanks("assassin");
+  assert(ar.double_attack === 1 && ar.steal === 1, "assassin roots double_attack+steal=1");
+  ["improve_dodge", "hiding", "envenom", "detoxify"].forEach(function (id) {
+    assert(ar[id] === 0, "assassin " + id + " default 0");
+  });
+
+  assert(almost(STATS.bashMod(1), 1.3), "bashMod 1 → 1.3");
+  assert(almost(STATS.bashMod(10), 4.0), "bashMod 10 → 4.0");
+  assert(almost(STATS.magnumBreakMod(1), 1.2), "magnum 1 → 1.2");
+  assert(almost(STATS.magnumBreakMod(10), 3.0), "magnum 10 → 3.0");
+  assert(STATS.swordMasteryAtk(10) === 40, "swordMasteryAtk(10)===40");
+  assert(STATS.twohandMasteryAtk(10) === 40, "twohandMasteryAtk(10)===40");
+  assert(STATS.improveDodgeFlee(10) === 30, "improveDodgeFlee(10)===30");
+  assert(almost(STATS.doubleAttackChance(10), 0.5), "doubleAttackChance(10)===0.5");
+  assert(DATA.SKILLS.detoxify.maxRank === 1, "detoxify maxRank 1");
+  assert(DATA.HEROES.warrior.skills.indexOf("bash") >= 0, "HEROES.warrior has bash");
+  assert(DATA.HEROES.assassin.skills.indexOf("envenom") >= 0, "HEROES.assassin has envenom");
+  assert(DATA.SKILLS.attack && DATA.SKILLS.stab, "old skill defs kept");
+  assert(!!DATA.ITEMS.weapon_claymore && DATA.ITEMS.weapon_claymore.twoHand === true, "claymore 2H sword in shop");
+  assert(DATA.ITEMS.weapon_claymore.weaponClass === "sword" && DATA.ITEMS.weapon_claymore.weaponAtk === 140, "claymore numbers");
+  assert(DATA.ITEMS.weapon_short.twoHand !== true, "1H swords stay 1H");
+  const hidTree = DATA.SKILL_TREES.hunter.map(function (n) { return n.id; });
+  assert(hidTree.indexOf("owl_eye") >= 0 && hidTree.indexOf("double_strafe") >= 0, "hunter tree untouched");
+  ["owl_eye", "vulture_eye", "double_strafe", "arrow_shower", "improve_concentration", "arrow_repel"].forEach(function (id) {
+    assert(hidTree.indexOf(id) >= 0, "hunter tree has " + id);
+    assert(DATA.HEROES.hunter.skills.indexOf(id) >= 0, "HEROES.hunter has " + id);
+  });
+  ["arrowshot", "powershot", "focus", "soularrow", "rain", "mark"].forEach(function (id) {
+    assert(hidTree.indexOf(id) < 0, "hunter tree must not include " + id);
+    assert(DATA.HEROES.hunter.skills.indexOf(id) < 0, "HEROES.hunter must not include " + id);
+  });
+  assert(!DATA.skillUnlocked("vulture_eye", { owl_eye: 2 }, "hunter"), "vulture locked until owl 3");
+  assert(DATA.skillUnlocked("vulture_eye", { owl_eye: 3 }, "hunter"), "vulture unlocked at owl 3");
+  assert(!DATA.skillUnlocked("double_strafe", { vulture_eye: 9 }, "hunter"), "double_strafe locked until vulture 10");
+  assert(DATA.skillUnlocked("double_strafe", { vulture_eye: 10 }, "hunter"), "double_strafe unlocked at vulture 10");
+  assert(!DATA.skillUnlocked("arrow_shower", { double_strafe: 4 }, "hunter"), "arrow_shower locked until DS 5");
+  assert(DATA.skillUnlocked("arrow_shower", { double_strafe: 5 }, "hunter"), "arrow_shower unlocked at DS 5");
+  assert(!DATA.skillUnlocked("arrow_repel", { improve_concentration: 0 }, "hunter"), "arrow_repel locked until conc 1");
+  assert(DATA.skillUnlocked("arrow_repel", { improve_concentration: 1 }, "hunter"), "arrow_repel unlocked at conc 1");
+  const hr = DATA.defaultSkillRanks("hunter");
+  assert(hr.owl_eye === 1 && hr.improve_concentration === 1, "hunter roots owl_eye+improve_concentration=1");
+  ["vulture_eye", "double_strafe", "arrow_shower", "arrow_repel"].forEach(function (id) {
+    assert(hr[id] === 0, "hunter " + id + " default 0");
+  });
+  assert(DATA.SKILLS.arrow_repel.maxRank === 1, "arrow_repel maxRank 1");
+  assert(STATS.vultureEyeRange(3) === 1, "vultureEyeRange(3)===1");
+  assert(STATS.vultureEyeRange(10) === 5, "vultureEyeRange(10)===5");
+  assert(STATS.vultureEyeHit(3) === 3 && STATS.vultureEyeHit(10) === 10, "vultureEyeHit stays lv");
+
+  const mig = { heroId: "hunter", skillRanks: { arrowshot: 3, powershot: 4, rain: 2, focus: 5, soularrow: 2, mark: 6, arrow_repel: 4, owl_eye: 1 }, autoFarmCfg: { skills: ["powershot", "rain", "owl_eye", "focus"] } };
+  PVE.migrateSkillRanks(mig);
+  assert(mig.skillRanks.double_strafe === 4, "migrate powershot→DS, got " + mig.skillRanks.double_strafe);
+  assert(mig.skillRanks.arrow_shower === 2, "migrate rain→shower, got " + mig.skillRanks.arrow_shower);
+  assert(mig.skillRanks.improve_concentration === 5, "migrate focus→conc, got " + mig.skillRanks.improve_concentration);
+  assert(mig.skillRanks.owl_eye === 5, "migrate soularrow/arrowshot→owl, got " + mig.skillRanks.owl_eye);
+  assert(mig.skillRanks.vulture_eye === 6, "migrate mark→vulture, got " + mig.skillRanks.vulture_eye);
+  assert(mig.skillRanks.arrow_repel === 1, "migrate cap arrow_repel 1, got " + mig.skillRanks.arrow_repel);
+  assert(!mig.skillRanks.powershot && !mig.skillRanks.arrowshot, "old hunter ranks stripped");
+  assert(mig.autoFarmCfg.skills[0] === "double_strafe" && mig.autoFarmCfg.skills[1] === "arrow_shower", "farm ids remapped");
+  assert(mig.autoFarmCfg.skills[2] === null, "farm palette drops passive owl_eye");
+  const farm = PVE.createSave("hunter", DATA.emptyAllocated());
+  assert(farm.autoFarmCfg.skills[0] === "double_strafe", "hunter farm default double_strafe");
 }
 
 console.log("rank scaling 1.15");
@@ -1030,11 +1122,13 @@ console.log("hunter range 10 / warrior range 1");
   assert(WORLD.skillRange(hunter, "arrowshot") === 10, "hunter arrowshot range 10");
   assert(WORLD.skillRange(hunter, "powershot") === 10, "hunter powershot range 10");
   assert(WORLD.skillRange(hunter, "soularrow") === 10, "hunter soularrow range 10");
-  assert(WORLD.skillRange(warrior, "attack") === 1, "warrior attack range 1");
-  assert(WORLD.skillRange(warrior, "magifireblade") === 1, "warrior magifireblade range 1");
-  assert(WORLD.skillRange(warrior, "blade_storm") === 1, "warrior blade_storm range 1");
+  assert(WORLD.skillRange(hunter, "double_strafe") === 10, "hunter double_strafe range 10");
+  assert(WORLD.skillRange(warrior, "bash") === 1, "warrior bash range 1");
+  assert(WORLD.skillRange(warrior, "magnum_break") === 1, "warrior magnum_break range 1");
+  assert(WORLD.skillRange(warrior, "provoke") === 9, "warrior provoke range 9");
   const assassin = { unit: { heroId: "assassin" } };
-  assert(WORLD.skillRange(assassin, "stab") === 1, "assassin stab range 1");
+  assert(WORLD.skillRange(assassin, "envenom") === 1, "assassin envenom range 1");
+  assert(WORLD.skillRange(assassin, "steal") === 1, "assassin steal range 1");
   assert(WORLD.AGGRO_LEASH === 14, "AGGRO_LEASH 14, got " + WORLD.AGGRO_LEASH);
 }
 
@@ -1135,7 +1229,11 @@ console.log("audio helper");
   const miss = AUDIO.onHitFx({ kind: "miss", amount: 0 }, { attacker: "hero", heroId: "warrior" });
   assert(miss === false, "miss is silent");
   const bow = AUDIO.onHitFx({ kind: "dmg", amount: 12 }, { attacker: "hero", heroId: "hunter" });
-  assert(bow === false, "hunter connect does not play slash");
+  assert(bow === "hit_arrow", "hunter connect plays hit_arrow");
+  const bowCrit = AUDIO.onHitFx({ kind: "dmg", amount: 12, crit: true }, { attacker: "hero", heroId: "hunter" });
+  assert(bowCrit === "hit_arrow_crit", "hunter crit plays hit_arrow_crit");
+  const bowMiss = AUDIO.onHitFx({ kind: "miss", amount: 0 }, { attacker: "hero", heroId: "hunter" });
+  assert(bowMiss === false, "hunter miss is silent");
   const mob = AUDIO.onHitFx({ kind: "dmg", amount: 8 }, { attacker: "mob", monsterId: "poring" });
   assert(mob === "mob_poring_attack", "poring land plays mob attack");
   const poison = AUDIO.onHitFx({ kind: "dmg", amount: 5, poison: true }, { attacker: "mob", monsterId: "poporing" });
@@ -1419,14 +1517,14 @@ console.log("auto farm cfg + inventory materials");
   assert(clamped.skills.length === 4 && clamped.pots.length === 3, "ensureAutoFarmCfg pads skills/pots");
 
   const save = PVE.createSave("warrior", DATA.emptyAllocated());
-  const unlearned = PVE.setFarmSkill(save, 0, "blade_storm");
-  assert(!unlearned.ok, "setFarmSkill rejects unlearned blade_storm");
+  const unlearned = PVE.setFarmSkill(save, 0, "magnum_break");
+  assert(!unlearned.ok, "setFarmSkill rejects unlearned magnum_break");
   const unknown = PVE.setFarmSkill(save, 0, "not_a_skill");
   assert(!unknown.ok, "setFarmSkill rejects unknown skill");
   const night = PVE.setFarmSkill(save, 0, "nightfall");
   assert(!night.ok, "setFarmSkill rejects other-job skill");
-  const okSk = PVE.setFarmSkill(save, 0, "attack");
-  assert(okSk.ok && save.autoFarmCfg.skills[0] === "attack", "setFarmSkill accepts learned attack");
+  const okSk = PVE.setFarmSkill(save, 0, "bash");
+  assert(okSk.ok && save.autoFarmCfg.skills[0] === "bash", "setFarmSkill accepts learned bash");
   const clr = PVE.setFarmSkill(save, 0, null);
   assert(clr.ok && save.autoFarmCfg.skills[0] == null, "setFarmSkill clears with null");
 
@@ -1487,34 +1585,34 @@ console.log("auto farm sit regen + skill order");
   assert(regenU.mp === 11, "sitting tick restores 2× mpRegen (3*2=6), got " + regenU.mp);
 
   const farm = PVE.createSave("warrior", DATA.emptyAllocated());
-  farm.skillRanks = Object.assign(DATA.defaultSkillRanks("warrior"), { heal: 1, magifireblade: 1 });
+  farm.skillRanks = Object.assign(DATA.defaultSkillRanks("warrior"), { bash: 5, magnum_break: 1, provoke: 5, endure: 1 });
   PVE.ensureProgress(farm);
-  const setG = PVE.setFarmSkill(farm, 0, "heal");
-  const setA = PVE.setFarmSkill(farm, 1, "attack");
-  const setM = PVE.setFarmSkill(farm, 2, "magifireblade");
-  assert(setG.ok && setA.ok && setM.ok, "farm slots accept learned heal/attack/magifireblade");
+  const setG = PVE.setFarmSkill(farm, 0, "endure");
+  const setA = PVE.setFarmSkill(farm, 1, "bash");
+  const setM = PVE.setFarmSkill(farm, 2, "magnum_break");
+  assert(setG.ok && setA.ok && setM.ok, "farm slots accept learned endure/bash/magnum_break");
   const hero = PVE.buildHeroUnit(farm);
   hero.cds = {};
   const me = { x: 5, y: 5, unit: hero };
   const foe = { x: 6, y: 5, dead: false, unit: { hp: 10, maxHp: 10 } };
-  assert(WORLD.pickFarmSkill(farm, me, foe) === "heal", "farm skill order picks first configured ready skill (heal)");
-  hero.cds.heal = 5000;
-  assert(WORLD.pickFarmSkill(farm, me, foe) === "attack", "farm skill order skips unready and casts next configured");
-  farm.autoFarmCfg.skills = [null, null, "magifireblade", "attack"];
+  assert(WORLD.pickFarmSkill(farm, me, foe) === "endure", "farm skill order picks first configured ready skill (endure)");
+  hero.cds.endure = 5000;
+  assert(WORLD.pickFarmSkill(farm, me, foe) === "bash", "farm skill order skips unready and casts next configured");
+  farm.autoFarmCfg.skills = [null, null, "magnum_break", "bash"];
   hero.cds = {};
-  assert(WORLD.pickFarmSkill(farm, me, foe) === "magifireblade", "farm skill order skips empties");
-  hero.cds.magifireblade = 1;
-  hero.cds.attack = 1;
-  assert(WORLD.pickFarmSkill(farm, me, foe) === null, "all empty/unready → null (fallback to existing heal/attack)");
+  assert(WORLD.pickFarmSkill(farm, me, foe) === "magnum_break", "farm skill order skips empties");
+  hero.cds.magnum_break = 1;
+  hero.cds.bash = 1;
+  assert(WORLD.pickFarmSkill(farm, me, foe) === null, "all empty/unready → null (fallback to existing endure/bash)");
 
   const casts = [];
   const origCast = WORLD.cast;
   WORLD.cast = function (id) { casts.push(id); return true; };
-  farm.autoFarmCfg.skills = ["heal", "attack", null, null];
+  farm.autoFarmCfg.skills = ["endure", "bash", null, null];
   hero.cds = {};
   const used = WORLD.tryFarmSkills(farm, me, foe);
   WORLD.cast = origCast;
-  assert(used === true && casts[0] === "heal", "tryFarmSkills casts first configured ready skill");
+  assert(used === true && casts[0] === "endure", "tryFarmSkills casts first configured ready skill");
 }
 
 console.log("field near hunting plain");
@@ -1892,6 +1990,24 @@ console.log("locked Archer bow ATK + 1st-job bow skills");
   const vmax = STATS.computeBowAtk(Object.assign({}, cOpts, { variance: "max" }));
   assert(c.minAtk === 539 && c.maxAtk === 576, "variance range 539–576 via mid packet, got " + c.minAtk + "-" + c.maxAtk);
   assert(vmin.atk === 539 && vmax.atk === 576, "min/max variance 539/576, got " + vmin.atk + "/" + vmax.atk);
+  assert(STATS.bowVariance(3, 125, "mid") === 0, "mid variance is 0");
+  assert(STATS.bowVariance(3, 125, "weird") === 0, "unknown mode still 0");
+  const amp = STATS.bowVarianceAmp(3, 125);
+  assert(almost(amp, 18.75), "amp 0.05*3*125=18.75, got " + amp);
+  assert(almost(STATS.bowVariance(3, 125, "min"), -amp), "min is -amp");
+  assert(almost(STATS.bowVariance(3, 125, "max"), amp), "max is +amp");
+  const r0 = STATS.bowVariance(3, 125, "roll", { next: function () { return 0; } });
+  const r1 = STATS.bowVariance(3, 125, "roll", { next: function () { return 0.999999; } });
+  assert(almost(r0, -amp), "roll next=0 → -amp, got " + r0);
+  assert(r1 > amp * 0.99 && r1 <= amp, "roll next≈1 → near +amp, got " + r1);
+  const rr = COMBAT.createRng(7);
+  const ra = STATS.bowVariance(3, 125, "roll", rr);
+  const rb = STATS.bowVariance(3, 125, "roll", rr);
+  assert(ra !== rb, "two seeded rolls differ, got " + ra + " " + rb);
+  assert(ra >= -amp && ra <= amp && rb >= -amp && rb <= amp, "rolls stay in [-amp,+amp]");
+  const rolled = STATS.computeBowAtk(Object.assign({}, cOpts, { variance: "roll", rng: COMBAT.createRng(3) }));
+  assert(rolled.atk >= rolled.minAtk && rolled.atk <= rolled.maxAtk, "roll ATK in [min,max] " + rolled.atk);
+  assert(rolled.minAtk === 539 && rolled.maxAtk === 576, "roll packet still reports mid fixture min/max 539–576");
 
   const tgt = dummy({ hardDef: 200, softDef: 103, def: 103 });
   const defDmg = COMBAT.applyBowDefense(557, tgt, { crit: false });
@@ -1939,10 +2055,10 @@ console.log("locked Archer bow ATK + 1st-job bow skills");
   assert(STATS.arrowAtkFrom({}) === 0, "arrowAtkFrom empty is 0 (no invented Arrow25)");
   assert(STATS.hasBowAmmo({}) === false, "hasBowAmmo empty is false");
   assert(STATS.hasBowAmmo({ arrowCount: 3 }) === true, "hasBowAmmo count>0");
-  assert(STATS.arrowAtkFrom({ ammo: { arrowAtk: 25 } }) === 25, "arrowAtkFrom reads ammo.arrowAtk");
+  assert(STATS.arrowAtkFrom({ ammo: { arrowAtk: 25 } }) === 0, "arrowAtkFrom leftover ammo is 0");
 
   const gateNoArrow = COMBAT.bowSkillGate({ equip: { weapon: "weapon_bow" } });
-  assert(!gateNoArrow.ok && gateNoArrow.reason === "no-arrow", "no arrow → cannot shoot, got " + JSON.stringify(gateNoArrow));
+  assert(gateNoArrow.ok, "bow without arrows still shoots, got " + JSON.stringify(gateNoArrow));
   const gateNoBow = COMBAT.bowSkillGate({ equip: {} });
   assert(!gateNoBow.ok && gateNoBow.reason === "no-bow", "no bow → combat refuses, got " + JSON.stringify(gateNoBow));
   const gateOk = COMBAT.bowSkillGate({ equip: { weapon: "weapon_bow" }, arrowCount: 1 });
@@ -1973,11 +2089,19 @@ console.log("locked Archer bow ATK + 1st-job bow skills");
   assert(!DATA.ITEMS.weapon_hunter && !DATA.ITEMS.hunter_bow, "no invented Hunter Bow 125 item");
   assert(!!DATA.SKILLS.double_strafe && !!DATA.SKILLS.arrow_shower && !!DATA.SKILLS.arrow_repel, "new skill ids in DATA.SKILLS");
   assert(!!DATA.SKILLS.owl_eye && !!DATA.SKILLS.vulture_eye && !!DATA.SKILLS.improve_concentration, "passives in DATA.SKILLS");
-  assert(DATA.SKILLS.arrowshot && DATA.HEROES.hunter.skills.indexOf("arrowshot") >= 0, "old hunter skills kept");
-  assert(DATA.HEROES.hunter.skills.indexOf("double_strafe") >= 0, "new ids on HEROES.hunter.skills");
+  assert(!!DATA.SKILLS.arrowshot, "old hunter skills kept");
+  assert(DATA.HEROES.hunter.skills.indexOf("arrowshot") < 0, "HEROES.hunter must not include arrowshot");
+  const officialH = ["owl_eye", "vulture_eye", "double_strafe", "arrow_shower", "improve_concentration", "arrow_repel"];
+  officialH.forEach(function (id) {
+    assert(DATA.HEROES.hunter.skills.indexOf(id) >= 0, "HEROES.hunter has " + id);
+  });
   const treeIds = DATA.SKILL_TREES.hunter.map(function (n) { return n.id; });
-  ["arrowshot", "double_strafe", "arrow_shower", "arrow_repel", "owl_eye", "vulture_eye", "improve_concentration"].forEach(function (id) {
+  officialH.forEach(function (id) {
     assert(treeIds.indexOf(id) >= 0, "tree has " + id);
+  });
+  ["arrowshot", "powershot", "focus", "soularrow", "rain", "mark"].forEach(function (id) {
+    assert(treeIds.indexOf(id) < 0, "tree must not include " + id);
+    assert(!!DATA.SKILLS[id], "old def " + id + " kept in DATA.SKILLS");
   });
 
   const kb = { x: 10, y: 10 };
@@ -2037,7 +2161,7 @@ console.log("arrow catalog v1");
   const hunter = PVE.createSave("hunter", DATA.emptyAllocated());
   assert(hunter.ammo && hunter.ammo.id === "arrow" && hunter.ammo.count === 100, "hunter createSave ammo 100, got " + JSON.stringify(hunter.ammo));
   assert(hunter.arrowCount === 100, "hunter arrowCount 100");
-  assert(STATS.arrowAtkFrom(hunter) === 25, "hunter start arrowAtkFrom 25, got " + STATS.arrowAtkFrom(hunter));
+  assert(STATS.arrowAtkFrom(hunter) === 0, "hunter start arrowAtkFrom 0, got " + STATS.arrowAtkFrom(hunter));
   assert(STATS.arrowCountFrom(hunter) === 100, "hunter start arrowCountFrom 100");
   assert(STATS.hasBowAmmo(hunter) === true, "hunter start hasBowAmmo true");
 
@@ -2050,18 +2174,19 @@ console.log("arrow catalog v1");
   assert(eq.ok, "hunter equip weapon_bow");
   const der = PVE.derived(hunter);
   assert(der.bowAtk && der.bowAtk.ok, "derived bowAtk ok");
-  assert(der.bowAtk.extraAtk === 25, "hunter start + weapon_bow ExtraATK 25, got " + der.bowAtk.extraAtk);
+  assert(der.bowAtk.extraAtk === 0, "hunter start + weapon_bow ExtraATK 0, got " + der.bowAtk.extraAtk);
   const mid = STATS.computeBowAtk({
     weapon: "weapon_bow",
     level: hunter.level || 1,
     str: 0,
     dex: 0,
     luk: 0,
-    arrowAtk: STATS.arrowAtkFrom(hunter),
+    arrowAtk: 25,
     variance: "mid",
     size: "M",
   });
   assert(mid.ok && mid.extraAtk === 25, "computeBowAtk mid Medium ExtraATK 25, got " + mid.extraAtk);
+  assert(der.bowAtk.extraAtk === 0, "hunter-save ExtraATK is 0");
 
   const spent = PVE.createSave("hunter", DATA.emptyAllocated());
   spent.ammo.count = 7;
@@ -2074,35 +2199,18 @@ console.log("arrow catalog v1");
 
   const buyH = PVE.createSave("hunter", DATA.emptyAllocated());
   const z0 = buyH.zeno;
+  const c0 = buyH.ammo.count;
   const b1 = PVE.buyAmmo(buyH, "arrow", 1);
-  assert(b1.ok && buyH.zeno === z0 - 1 && buyH.ammo.count === 101, "buyAmmo 1 costs 1 count 101, zeno " + buyH.zeno + " count " + buyH.ammo.count);
-  const z1 = buyH.zeno;
-  const b100 = PVE.buyAmmo(buyH, "arrow", 100);
-  assert(b100.ok && buyH.zeno === z1 - 100 && buyH.ammo.count === 201, "pack 100 costs 100 count +=100, zeno " + buyH.zeno + " count " + buyH.ammo.count);
-
-  const notArch = PVE.createSave("warrior", DATA.emptyAllocated());
-  const zW = notArch.zeno;
-  const denyJob = PVE.buyAmmo(notArch, "arrow", 1);
-  assert(!denyJob.ok && notArch.zeno === zW, "cannot buy if not archer");
-
-  const poor = PVE.createSave("hunter", DATA.emptyAllocated());
-  poor.zeno = 0;
-  const cPoor = poor.ammo.count;
-  const denyZ = PVE.buyAmmo(poor, "arrow", 1);
-  assert(!denyZ.ok && poor.zeno === 0 && poor.ammo.count === cPoor, "cannot buy if zeno short");
-
-  const fat = PVE.createSave("hunter", DATA.emptyAllocated());
-  fat.zeno = 10000;
-  fat.potions.red = 30;
-  const zF = fat.zeno;
-  const cF = fat.ammo.count;
-  const denyW = PVE.buyAmmo(fat, "arrow", 1);
-  assert(!denyW.ok && denyW.reason === "น้ำหนักเต็ม แบกไม่ไหว", "cannot buy if overweight, reason " + (denyW && denyW.reason));
-  assert(fat.zeno === zF && fat.ammo.count === cF, "overweight buyAmmo leaves zeno/count");
-
-  const lvGate = PVE.createSave("hunter", DATA.emptyAllocated());
-  const denyLv = PVE.buyAmmo(lvGate, "arrow_steel", 1);
-  assert(!denyLv.ok, "lv1 cannot buy steel req 12");
+  assert(!b1.ok && /ลูกธนู/.test(b1.reason || ""), "shop no longer sells arrows");
+  assert(buyH.zeno === z0 && buyH.ammo.count === c0, "buyAmmo blocked leaves zeno/count");
+  assert(DATA.AMMO_ORDER.length === 0, "AMMO_ORDER empty so shop lists no arrows");
+  assert(COMBAT.hasBowAmmoForCombat({ arrowCount: 0 }) === true, "archer fires with 0 arrows");
+  const noConsume = COMBAT.consumeBowAmmo({ arrowCount: 5 });
+  assert(noConsume.ok && noConsume.skipped, "consumeBowAmmo is a no-op");
+  const worldSrc = readFileSync(join(root, "js", "world.js"), "utf8");
+  assert(worldSrc.indexOf("ไม่มีลูกธนู") < 0, "world.js has no ไม่มีลูกธนู toast");
+  assert(COMBAT.bowSkillGate({ weaponClass: "bow", arrowCount: 0 }).ok === true, "bowSkillGate bow+0 arrows ok");
+  assert(COMBAT.bowSkillGate({}).reason === "no-bow", "bowSkillGate empty reason no-bow");
 }
 
 console.log("field mob respawn 20-30s");
@@ -2244,6 +2352,63 @@ console.log("pickFarmTarget honors farmAllowsMob");
   }
 }
 
+console.log("farm idle does not wait CD");
+{
+  const WORLD = ctx.WORLD;
+  assert(typeof WORLD.tryFarmBasic === "function", "WORLD.tryFarmBasic exported");
+  assert(typeof WORLD.pickFarmTarget === "function", "pickFarmTarget exported");
+
+  MAP.setZone("field");
+  const g = MAP.ZONES.field.grid;
+  const saved = [];
+  function setWalk(x, y, on) {
+    saved.push({ x: x, y: y, walk: !!(g.walkable[y] && g.walkable[y][x]) });
+    if (!g.walkable[y]) g.walkable[y] = [];
+    g.walkable[y][x] = on;
+  }
+  try {
+    for (let y = 88; y <= 92; y++) {
+      for (let x = 8; x <= 16; x++) setWalk(x, y, true);
+    }
+    const player = { x: 10, y: 90, kind: "player" };
+    const a = { id: "m-a", kind: "mob", monsterId: "poring", x: 12, y: 90, dead: false };
+    const b = { id: "m-b", kind: "mob", monsterId: "poring", x: 15, y: 90, dead: false };
+    const save = PVE.createSave("warrior", DATA.emptyAllocated());
+    assert(WORLD.pickFarmTarget(player, [a, b], save) === a, "nearest is a");
+    const skip = { "m-a": true };
+    assert(WORLD.pickFarmTarget(player, [a, b], save, skip) === b, "skip a picks b");
+    assert(WORLD.pickFarmTarget(player, [a], save, skip) === null, "skip only candidate is empty");
+  } finally {
+    saved.reverse().forEach(function (c) {
+      if (!g.walkable[c.y]) g.walkable[c.y] = [];
+      g.walkable[c.y][c.x] = c.walk;
+    });
+  }
+
+  const host = { querySelector: function () { return null; } };
+  const farm = PVE.createSave("hunter", DATA.emptyAllocated());
+  farm.mapId = "field";
+  farm.autoFarm = true;
+  PVE.ensureAutoFarmCfg(farm);
+  farm.autoFarmCfg.skills = ["double_strafe", null, null, null];
+  try {
+    WORLD.mount(host, farm);
+    const unit = WORLD.playerUnit();
+    assert(!!unit, "mounted hunter unit");
+    if (unit) {
+      unit.cds = unit.cds || {};
+      unit.cds.double_strafe = 9999;
+    }
+    const p = WORLD.playerEntity && WORLD.playerEntity();
+    const picked = WORLD.pickFarmSkill(farm, p || { unit: unit, x: 5, y: 94 }, { x: 6, y: 94, unit: { hp: 1 } });
+    assert(picked == null, "farm skill on CD is not picked");
+    if (p) p.atkReadyAt = Date.now() + 5000;
+    assert(WORLD.tryFarmBasic(p || { unit: unit, atkReadyAt: Date.now() + 5000 }) === false, "tryFarmBasic respects atkReadyAt");
+  } finally {
+    WORLD.teardown();
+  }
+}
+
 console.log("auto farm yields to manual input");
 {
   const WORLD = ctx.WORLD;
@@ -2260,6 +2425,272 @@ console.log("auto farm yields to manual input");
   MAP.markManual(0);
 }
 
+
+console.log("WORLD.syncLiveHero live snapshot");
+{
+  const WORLD = ctx.WORLD;
+  const host = { querySelector: function () { return null; } };
+  MAP.setZone("field");
+
+  const save = PVE.createSave("hunter", DATA.emptyAllocated());
+  save.mapId = "field";
+  save.skillRanks = Object.assign(DATA.defaultSkillRanks("hunter"), save.skillRanks || {});
+  try {
+    WORLD.mount(host, save);
+    const unit0 = WORLD.playerUnit();
+    assert(!!unit0, "mount builds player unit");
+    const oldHit = unit0.hit;
+    const oldAtk = unit0.atk;
+    const oldRange = WORLD.skillRange(WORLD.playerEntity(), "arrowshot");
+    assert(oldRange === 10, "pre-sync bow range 10, got " + oldRange);
+    const oldOwl = (unit0.skillRanks && unit0.skillRanks.owl_eye) || 0;
+    assert(oldOwl === 0 || oldOwl < 5, "pre-sync owl_eye below 5, got " + oldOwl);
+
+    unit0.hp = Math.max(1, Math.floor(unit0.maxHp / 2));
+    const keepHp = unit0.hp;
+    save.skillRanks.owl_eye = 5;
+    save.skillRanks.vulture_eye = 3;
+    save.allocated.dex = (save.allocated.dex || 0) + 10;
+
+    const ok = WORLD.syncLiveHero(save);
+    assert(ok === true, "syncLiveHero returns true");
+    const unit1 = WORLD.playerUnit();
+    assert(unit1 && unit1 !== unit0, "sync replaces unit object");
+    assert(unit1.skillRanks.owl_eye === 5, "skillRanks.owl_eye === 5, got " + unit1.skillRanks.owl_eye);
+    assert(unit1.hit > oldHit, "hit increased " + oldHit + " → " + unit1.hit);
+    assert(unit1.atk !== oldAtk, "atk changed " + oldAtk + " → " + unit1.atk);
+    const newRange = WORLD.skillRange(WORLD.playerEntity(), "arrowshot");
+    assert(newRange === 11, "range 10→11 with vulture 3, got " + oldRange + " → " + newRange);
+    assert(unit1.hp === keepHp, "hp preserved at " + keepHp + ", got " + unit1.hp);
+
+    unit1.cds.double_strafe = 2;
+    unit1.poisons = [{ damage: 1, turns: 2, src: "x" }];
+    const ok2 = WORLD.syncLiveHero(save);
+    assert(ok2 === true, "second syncLiveHero returns true");
+    const unit2 = WORLD.playerUnit();
+    assert(unit2 !== unit1, "second sync replaces unit object");
+    assert(unit2.cds && unit2.cds.double_strafe === 2, "cds.double_strafe preserved, got " + (unit2.cds && unit2.cds.double_strafe));
+    assert(Array.isArray(unit2.poisons) && unit2.poisons.length === 1 && unit2.poisons[0].src === "x", "poisons preserved");
+    assert(unit2.poisons[0].damage === 1 && unit2.poisons[0].turns === 2, "poison payload intact");
+  } finally {
+    WORLD.teardown();
+  }
+
+  const wsave = PVE.createSave("warrior", DATA.emptyAllocated());
+  wsave.mapId = "field";
+  PVE.ensureAutoFarmCfg(wsave);
+  wsave.autoFarmCfg.skills = [null, null, null, null];
+  const setAtk = PVE.setFarmSkill(wsave, 0, "bash");
+  assert(setAtk.ok, "setFarmSkill bash ok, " + (setAtk.reason || ""));
+  try {
+    WORLD.mount(host, wsave);
+    const ok3 = WORLD.syncLiveHero(wsave);
+    assert(ok3 === true, "warrior syncLiveHero returns true");
+    const wu = WORLD.playerUnit();
+    assert(wu.skills && wu.skills.indexOf("bash") >= 0, "new unit.skills includes learned bash");
+    const pent = WORLD.playerEntity();
+    const foe = { x: pent.x + 1, y: pent.y, dead: false, unit: { hp: 10, maxHp: 10 } };
+    const picked = WORLD.pickFarmSkill(wsave, pent, foe);
+    assert(picked === "bash", "pickFarmSkill sees learned bash from new unit, got " + picked);
+  } finally {
+    WORLD.teardown();
+  }
+}
+
+console.log("sit pose sprites");
+{
+  const FX = ctx.FX;
+  const WORLD = ctx.WORLD;
+  const heroes = ["warrior", "assassin", "hunter"];
+  const dirs = ["s", "se", "e", "n"];
+  heroes.forEach(function (hid) {
+    dirs.forEach(function (d) {
+      const rel = "assets/chars/" + hid + "_sit_" + d + ".png";
+      assert(existsSync(join(root, rel)), "exists " + rel);
+    });
+  });
+  const wSitS = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s", sitting: true });
+  assert(wSitS === "assets/chars/warrior_sit_s.png", "warrior sitting s, got " + wSitS);
+  const aSitW = FX.spriteSrc("assassin", { heroId: "assassin", facing: "w", sitting: true });
+  assert(aSitW === "assets/chars/assassin_sit_e.png", "assassin sitting w flips to e, got " + aSitW);
+  const hSitNw = FX.spriteSrc("hunter", { heroId: "hunter", facing: "nw", sitting: true });
+  assert(hSitNw === "assets/chars/hunter_sit_n.png", "hunter sitting nw uses n, got " + hSitNw);
+  const hSitSe = FX.spriteSrc("hunter", { heroId: "hunter", facing: "se", sitting: true });
+  assert(hSitSe === "assets/chars/hunter_sit_se.png", "hunter sitting se, got " + hSitSe);
+  const wStand = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s" });
+  assert(wStand === "assets/chars/warrior_s.png", "standing warrior s not sit, got " + wStand);
+  assert(typeof WORLD.setSitting === "function", "WORLD.setSitting exists");
+  assert(typeof MAP.setSitting === "function", "MAP.setSitting exists");
+  const css = readFileSync(join(root, "css/style.css"), "utf8");
+  assert(css.indexOf("sitRest") >= 0, "css contains sitRest");
+  assert(/1\.6s/.test(css), "css contains 1.6s");
+  const sitRule = css.match(/\.map-avatar\.sitting[^{]*\{[^}]*\}/);
+  assert(!!sitRule, "css has .map-avatar.sitting rule");
+  assert(sitRule && sitRule[0].indexOf("scaleY") < 0, "sitting rule has no scaleY squash");
+  const sitKf = css.match(/@keyframes sitRest\s*\{[\s\S]*?\n\}/);
+  assert(!!sitKf, "css has sitRest keyframes");
+  assert(sitKf && sitKf[0].indexOf("scaleY") < 0, "sitRest keyframes have no scaleY");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);
 
+console.log("sell and drop");
+{
+  assert(DATA.sellZeno(100) === 50, "sellZeno(100)===50, got " + DATA.sellZeno(100));
+  assert(DATA.sellZeno(1) === 1, "sellZeno(1)===1, got " + DATA.sellZeno(1));
+  assert(DATA.sellZeno(3) === 1, "sellZeno(3)===1, got " + DATA.sellZeno(3));
+  assert(DATA.sellZeno(0) === 0, "sellZeno(0)===0, got " + DATA.sellZeno(0));
+  assert(DATA.sellZeno(-5) === 0, "sellZeno(-5)===0, got " + DATA.sellZeno(-5));
+  assert(DATA.sellZeno(undefined) === 0, "sellZeno(undefined)===0, got " + DATA.sellZeno(undefined));
+
+  assert(PVE.inProntera({}) === true, "inProntera missing mapId true");
+  assert(PVE.inProntera({ mapId: "city" }) === true, "inProntera city true");
+  assert(PVE.inProntera({ mapId: "field" }) === false, "inProntera field false");
+  assert(PVE.inProntera({ mapId: "bosses" }) === false, "inProntera bosses false");
+
+  const w = PVE.createSave("warrior", DATA.emptyAllocated());
+  w.zeno = 10000;
+  w.owned.helm_leather = true;
+  w.equip.helm = "helm_leather";
+  w.refine.helm_leather = 2;
+  const wBefore = PVE.carryWeight(w);
+  const z0 = w.zeno;
+  const soldHelm = PVE.sellItem(w, "helm_leather", 1);
+  assert(soldHelm.ok === true, "sell helm_leather ok");
+  assert(soldHelm.kind === "gear" && soldHelm.qty === 1, "sell gear kind/qty");
+  assert(soldHelm.zeno === 40, "helm_leather price 80 → +40 zeno, got " + soldHelm.zeno);
+  assert(w.zeno === z0 + 40, "save.zeno increased by 40");
+  assert(!w.owned.helm_leather, "owned.helm_leather cleared");
+  assert(w.refine.helm_leather == null, "refine.helm_leather gone");
+  assert(w.equip.helm !== "helm_leather", "unequipped from helm slot");
+  assert(PVE.carryWeight(w) === wBefore - DATA.itemWeight("helm_leather"), "weight down after sell gear");
+  assert(soldHelm.toast === "ขาย " + DATA.lootName("helm_leather") + " ×1 · +40 Zeno", "gear sell toast");
+
+  const w7 = PVE.createSave("warrior", DATA.emptyAllocated());
+  w7.zeno = 10000;
+  w7.owned.helm_leather = true;
+  w7.refine.helm_leather = 7;
+  const sold7 = PVE.sellItem(w7, "helm_leather");
+  assert(sold7.ok && sold7.zeno === 40, "+7 refined helm still pays 40 not more, got " + sold7.zeno);
+
+  const noOwn = PVE.createSave("warrior", DATA.emptyAllocated());
+  noOwn.zeno = 10000;
+  const zNo = noOwn.zeno;
+  const miss = PVE.sellItem(noOwn, "helm_leather");
+  assert(!miss.ok && miss.reason === "ไม่มี", "cannot sell unowned gear, reason " + miss.reason);
+  assert(noOwn.zeno === zNo, "unowned sell leaves zeno unchanged");
+
+  const pot = PVE.createSave("warrior", DATA.emptyAllocated());
+  pot.zeno = 10000;
+  assert((pot.potions.orange || 0) === 2, "warrior starts with 2 orange");
+  const pw = PVE.carryWeight(pot);
+  const pz = pot.zeno;
+  const soldOrange = PVE.sellItem(pot, "orange", 2);
+  assert(soldOrange.ok === true, "sell 2 orange ok");
+  assert(soldOrange.zeno === 80, "2 orange × 40 = +80, got " + soldOrange.zeno);
+  assert(pot.zeno === pz + 80, "zeno +80 after orange");
+  assert((pot.potions.orange || 0) === 0, "potions.orange -= 2");
+  assert(PVE.carryWeight(pot) === pw - 2 * DATA.itemWeight("orange"), "weight down after sell orange");
+
+  const over = PVE.createSave("warrior", DATA.emptyAllocated());
+  over.zeno = 10000;
+  const oz = over.zeno;
+  const oc = over.potions.orange;
+  const tooMany = PVE.sellItem(over, "orange", 99);
+  assert(!tooMany.ok, "sell more than owned fails");
+  assert(over.zeno === oz && over.potions.orange === oc, "over-sell leaves counts/zeno unchanged");
+
+  const h = PVE.createSave("hunter", DATA.emptyAllocated());
+  h.zeno = 10000;
+  assert(h.ammo && h.ammo.id === "arrow" && h.ammo.count === 100, "hunter start 100 arrows");
+  const hz = h.zeno;
+  const hw = PVE.carryWeight(h);
+  const arrowPrice = DATA.ITEMS.arrow.price;
+  const unitArrow = DATA.sellZeno(arrowPrice);
+  const soldArrows = PVE.sellItem(h, "arrow", 10);
+  assert(soldArrows.ok === true, "sell 10 arrows ok");
+  assert(soldArrows.zeno === unitArrow * 10, "arrow zeno " + soldArrows.zeno);
+  assert(h.zeno === hz + unitArrow * 10, "hunter zeno increased");
+  assert(h.ammo.count === 90, "ammo.count 90, got " + h.ammo.count);
+  assert(h.arrowCount === 90, "arrowCount synced 90, got " + h.arrowCount);
+  assert(h.ammo.count >= 0 && h.arrowCount >= 0, "ammo never negative");
+  assert(PVE.carryWeight(h) === hw - 10 * DATA.itemWeight("arrow"), "weight down after sell arrows");
+
+  const wrongAmmo = PVE.sellItem(h, "arrow_steel", 1);
+  assert(!wrongAmmo.ok && wrongAmmo.reason === "ไม่มี", "sell other arrow type fails ไม่มี");
+
+  const mat = PVE.createSave("warrior", DATA.emptyAllocated());
+  mat.zeno = 10000;
+  mat.materials.ore_phracon = 5;
+  const mz = mat.zeno;
+  const mw = PVE.carryWeight(mat);
+  const soldMat = PVE.sellItem(mat, "ore_phracon", 3);
+  assert(soldMat.ok === true, "sell material ok");
+  assert(soldMat.zeno === 0, "ore_phracon sellZeno 0, got " + soldMat.zeno);
+  assert(mat.zeno === mz, "material sell adds 0 zeno");
+  assert((mat.materials.ore_phracon || 0) === 2, "materials -= 3, got " + mat.materials.ore_phracon);
+  assert(PVE.carryWeight(mat) === mw - 3 * DATA.itemWeight("ore_phracon"), "weight down after sell ore");
+
+  const dg = PVE.createSave("warrior", DATA.emptyAllocated());
+  dg.zeno = 10000;
+  dg.owned.helm_leather = true;
+  dg.equip.helm = "helm_leather";
+  dg.refine.helm_leather = 4;
+  const dz = dg.zeno;
+  const dw = PVE.carryWeight(dg);
+  const droppedGear = PVE.dropItem(dg, "helm_leather", 1);
+  assert(droppedGear.ok === true, "drop gear ok");
+  assert(droppedGear.zeno === 0 && dg.zeno === dz, "drop gear zeno unchanged");
+  assert(!dg.owned.helm_leather && dg.refine.helm_leather == null, "drop clears owned+refine");
+  assert(dg.equip.helm !== "helm_leather", "drop unequips");
+  assert(droppedGear.needsConfirm === true, "drop gear needsConfirm");
+  assert(droppedGear.toast === "โยนทิ้ง " + DATA.lootName("helm_leather") + " ×1", "drop gear toast");
+  assert(PVE.carryWeight(dg) === dw - DATA.itemWeight("helm_leather"), "weight down after drop gear");
+
+  const dp = PVE.createSave("warrior", DATA.emptyAllocated());
+  const red0 = dp.potions.red;
+  const drop1 = PVE.dropItem(dp, "red", 1);
+  assert(drop1.ok === true, "drop 1 potion ok");
+  assert(drop1.needsConfirm === false, "qty===1 stack needsConfirm false");
+  assert((dp.potions.red || 0) === red0 - 1, "red decremented");
+  const dropMany = PVE.dropItem(dp, "red", 2);
+  assert(dropMany.ok === true && dropMany.needsConfirm === true, "qty>1 stack needsConfirm true");
+
+  const dn = PVE.createSave("warrior", DATA.emptyAllocated());
+  const redN = dn.potions.red;
+  const dropNeg = PVE.dropItem(dn, "red", 999);
+  assert(!dropNeg.ok, "drop more than owned fails");
+  assert(dn.potions.red === redN, "drop cannot go negative, count unchanged");
+
+  const w70 = PVE.createSave("warrior", DATA.emptyAllocated());
+  w70.potions = { red: 21, orange: 0, white: 0, blue: 0, berserk: 0 };
+  const ws70b = PVE.weightState(w70);
+  assert(ws70b.cur === 1470 && ws70b.noRegen === true && ws70b.over === false, "70% noRegen unchanged");
+  w70.potions.red = 26;
+  const ws90b = PVE.weightState(w70);
+  assert(ws90b.cur === 1820 && ws90b.over === true && ws90b.full === false, "90% over unchanged");
+  w70.potions.red = 29;
+  const ws100b = PVE.weightState(w70);
+  assert(ws100b.cur === 2030 && ws100b.full === true, "100% full unchanged");
+
+  const appSrc = readFileSync(join(root, "js", "app.js"), "utf8");
+  const uiSrc = readFileSync(join(root, "js", "ui.js"), "utf8");
+  const pveSrc = readFileSync(join(root, "js", "pve.js"), "utf8");
+  assert(appSrc.indexOf("App.sellItem") >= 0, "app.js has App.sellItem");
+  assert(appSrc.indexOf("App.dropItem") >= 0, "app.js has App.dropItem");
+  assert(appSrc.indexOf("ขาย") >= 0, "app.js toast string ขาย");
+  assert(appSrc.indexOf("โยนทิ้ง") >= 0, "app.js toast string โยนทิ้ง");
+  assert(uiSrc.indexOf(">1<") >= 0 || uiSrc.indexOf(';"1<') >= 0 || uiSrc.indexOf(">1</button>") >= 0, "ui qty strip has 1");
+  assert(uiSrc.indexOf(">10<") >= 0 || uiSrc.indexOf(">10</button>") >= 0, "ui qty strip has 10");
+  assert(uiSrc.indexOf("ทั้งหมด") >= 0, "ui qty strip has ทั้งหมด");
+  assert(uiSrc.indexOf("App.sellItem") >= 0, "ui.js sell hook");
+  assert(uiSrc.indexOf("App.dropItem") >= 0, "ui.js drop hook");
+  assert(!/MAP\.(dropItem|placeItem|setTileItem)/.test(pveSrc), "pve.js does not write items onto map tiles");
+  const mapSrc2 = readFileSync(join(root, "js", "map.js"), "utf8");
+  const worldSrc2 = readFileSync(join(root, "js", "world.js"), "utf8");
+  assert(mapSrc2.indexOf("PVE.sellItem") < 0 && worldSrc2.indexOf("PVE.sellItem") < 0, "no sell/drop added to MAP/WORLD");
+}
+
+console.log("\n" + passed + " passed, " + failed + " failed");
+if (failed) process.exit(1);

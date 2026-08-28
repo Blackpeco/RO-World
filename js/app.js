@@ -288,6 +288,7 @@
       if (App.mapIsLive() || App.cityWinOpen()) {
         UI.closeCityWin && UI.closeCityWin();
         UI.refreshHud && UI.refreshHud(App.save);
+        App.syncLiveHero();
         return;
       }
       App.goWorld();
@@ -448,6 +449,7 @@
       if (App.mapIsLive() || App.cityWinOpen()) {
         UI.closeCityWin && UI.closeCityWin();
         UI.refreshHud && UI.refreshHud(App.save);
+        App.syncLiveHero();
         return;
       }
       if (!App.save.mapId) App.save.mapId = "city";
@@ -525,6 +527,15 @@
     else if (next === "inv") App.goInv();
   };
 
+  App.syncLiveHero = function () {
+    if (typeof WORLD !== "undefined" && WORLD.live && WORLD.live() && WORLD.syncLiveHero) {
+      WORLD.syncLiveHero(App.save);
+      if (UI.refreshHud) UI.refreshHud(App.save);
+      if (UI.refreshRt && WORLD.hudModel) UI.refreshRt(WORLD.hudModel());
+    }
+    if (typeof MAP !== "undefined" && MAP.resumeAutoIfNeeded) MAP.resumeAutoIfNeeded(App.save);
+  };
+
     App.mapIsLive = function () {
     return App.screen === "map" && typeof document !== "undefined" && !!document.getElementById("world-map");
   };
@@ -552,6 +563,7 @@
     if (App.cityWinOpen()) {
       UI.openCityWin(kind || UI._cityWinKind || "shop", App.save);
       UI.refreshHud && UI.refreshHud(App.save);
+      App.syncLiveHero();
       return;
     }
     if (kind === "shop") UI.shop(App.save);
@@ -560,6 +572,7 @@
     else if (kind === "potions") UI.potionShop(App.save);
     else if (kind === "skills") App.refreshSkills();
     else if (kind === "status") App.refreshAlloc();
+    App.syncLiveHero();
   };
 
   App.goShop = function () {
@@ -648,18 +661,21 @@
     if (!App.save) return;
     PVE.toggleFarmMob(App.save, id);
     UI.openCityWin("farm-mobs", App.save);
+    App.syncLiveHero();
   };
 
   App.setFarmMobsAll = function () {
     if (!App.save) return;
     PVE.setFarmMobsAll(App.save);
     UI.openCityWin("farm-mobs", App.save);
+    App.syncLiveHero();
   };
 
   App.setFarmMobsNone = function () {
     if (!App.save) return;
     PVE.setFarmMobsNone(App.save);
     UI.openCityWin("farm-mobs", App.save);
+    App.syncLiveHero();
   };
 
   App.goInv = function () {
@@ -668,12 +684,20 @@
     UI.openCityWin("inv", App.save);
   };
 
+  App.toggleSit = function () {
+    if (!App.save || !(App.mapIsLive && App.mapIsLive())) return;
+    var on = false;
+    if (typeof MAP !== "undefined" && MAP.toggleSit) on = MAP.toggleSit();
+    else if (typeof WORLD !== "undefined" && WORLD.toggleSit) on = WORLD.toggleSit();
+    if (UI && UI.toast) UI.toast(on ? "นั่งพัก" : "ยืนขึ้น");
+  };
+
   App.setAutoFarm = function (on) {
     if (!App.save) return;
     App.save.autoFarm = !!on;
     UI.toast(App.save.autoFarm ? "Auto Farm เปิด" : "Auto Farm ปิด");
     UI.refreshHud && UI.refreshHud(App.save);
-    if (typeof MAP !== "undefined" && MAP.resumeAutoIfNeeded) MAP.resumeAutoIfNeeded(App.save);
+    App.syncLiveHero();
     if (App.cityWinOpen() && UI._cityWinKind === "farm") UI.openCityWin("farm", App.save);
   };
 
@@ -681,18 +705,21 @@
     if (!App.save) return;
     PVE.setFarmSit(App.save, spec);
     UI.openCityWin("farm", App.save);
+    App.syncLiveHero();
   };
 
   App.setFarmSkill = function (slot, skillId) {
     if (!App.save) return;
     PVE.setFarmSkill(App.save, slot, skillId);
     UI.openCityWin("farm", App.save);
+    App.syncLiveHero();
   };
 
   App.setFarmPot = function (slot, spec) {
     if (!App.save) return;
     PVE.setFarmPot(App.save, slot, spec);
     UI.openCityWin("farm", App.save);
+    App.syncLiveHero();
   };
 
   App._farmPickSkill = function (skillId) {
@@ -732,6 +759,7 @@
     if (typeof WORLD !== "undefined" && WORLD.live && WORLD.live() && UI.refreshRt) {
       UI.refreshRt(WORLD.hudModel());
     }
+    App.syncLiveHero();
   };
 
   App.toggleAutoFarm = function () {
@@ -739,7 +767,7 @@
     App.save.autoFarm = !App.save.autoFarm;
     UI.toast(App.save.autoFarm ? "Auto Farm เปิด" : "Auto Farm ปิด");
     UI.refreshHud(App.save);
-    if (typeof MAP !== "undefined" && MAP.resumeAutoIfNeeded) MAP.resumeAutoIfNeeded(App.save);
+    App.syncLiveHero();
     if (App.cityWinOpen() && UI._cityWinKind === "farm") UI.openCityWin("farm", App.save);
     if (!App.save.autoFarm && typeof MAP !== "undefined" && App.screen === "map") {
       /* walker stops on next tick via save flag */
@@ -859,6 +887,70 @@
     App.refreshCityOrPage("shop");
   };
 
+  App.inProntera = function () {
+    return PVE.inProntera(App.save);
+  };
+
+  App.qtyOf = function (inputId, max) {
+    max = Math.max(1, Math.floor(Number(max) || 1));
+    var el = typeof document !== "undefined" && document.getElementById(inputId);
+    var n = el ? Math.floor(Number(el.value) || 1) : 1;
+    if (n < 1) n = 1;
+    if (n > max) n = max;
+    return n;
+  };
+
+  App._refreshAfterSellDrop = function () {
+    if (!App.save) return;
+    if (App.cityWinOpen && App.cityWinOpen()) {
+      var kind = (typeof UI !== "undefined" && UI._cityWinKind) || App.screen || "inv";
+      if (kind === "inv") {
+        UI.openCityWin("inv", App.save);
+        if (UI.refreshHud) UI.refreshHud(App.save);
+        App.syncLiveHero();
+        return;
+      }
+      App.refreshCityOrPage(kind);
+      return;
+    }
+    if (App.screen === "shop" || App.screen === "potions" || App.screen === "equip") {
+      App.refreshCityOrPage(App.screen);
+      return;
+    }
+    App.syncLiveHero();
+  };
+
+  App.sellItem = function (id, qty) {
+    if (!App.save) return;
+    if (!PVE.inProntera(App.save)) {
+      UI.toast("ขายได้แค่ในพรอนเทรา");
+      return;
+    }
+    var r = PVE.sellItem(App.save, id, qty);
+    if (!r.ok) UI.toast(r.reason || "ขายไม่ได้");
+    else UI.toast(r.toast);
+    App.syncLiveHero();
+    App._refreshAfterSellDrop();
+  };
+
+  App.dropItem = function (id, qty, confirmed) {
+    if (!App.save) return;
+    qty = Math.max(1, Math.floor(Number(qty) || 1));
+    var kind = PVE.itemKind(id);
+    var name = DATA.lootName(id);
+    if (kind === "gear") qty = 1;
+    if ((kind === "gear" || qty > 1) && !confirmed) {
+      if (typeof window !== "undefined" && window.confirm) {
+        if (!window.confirm("โยนทิ้ง " + name + " ×" + qty + "?")) return;
+      }
+    }
+    var r = PVE.dropItem(App.save, id, qty);
+    if (!r.ok) UI.toast(r.reason || "โยนทิ้งไม่ได้");
+    else UI.toast(r.toast);
+    App.syncLiveHero();
+    App._refreshAfterSellDrop();
+  };
+
   App.goEquip = function () {
     PVE.syncVitals(App.save);
     if (App.mapIsLive()) {
@@ -915,6 +1007,7 @@
     if (App.cityWinOpen() && UI._cityWinKind === "inv") {
       UI.openCityWin("inv", App.save);
       UI.refreshHud && UI.refreshHud(App.save);
+      App.syncLiveHero();
       return;
     }
     App.refreshCityOrPage("equip");
@@ -1607,6 +1700,7 @@
         const arenaOn = typeof WORLD !== "undefined" && WORLD.mode && WORLD.mode() === "arena";
         if (!arenaOn) {
           const hk = ev.key;
+          if (ev.key === "n" || ev.key === "N") { ev.preventDefault(); App.toggleSit(); return; }
           if (hk === "e" || hk === "E") { ev.preventDefault(); App.toggleCityWin("equip"); return; }
           if (hk === "r" || hk === "R") { ev.preventDefault(); App.toggleCityWin("shop"); return; }
           if (hk === "c" || hk === "C") { ev.preventDefault(); App.toggleCityWin("status"); return; }
@@ -1658,6 +1752,14 @@
       if (shot === "field") {
         App.save.mapId = "field";
         App.goWorld();
+        return;
+      }
+      if (shot === "sit") {
+        App.save.cityPos = { x: 40, y: 44 };
+        App.goCity();
+        setTimeout(function () {
+          if (typeof MAP !== "undefined" && MAP.setSitting) MAP.setSitting(true);
+        }, 500);
         return;
       }
       if (shot === "plaza") App.save.cityPos = { x: 40, y: 44 };

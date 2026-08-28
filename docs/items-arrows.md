@@ -4,7 +4,12 @@ Locked 2026-08-26 by Item. Kirito implements. Do not invent extra arrows this pa
 
 Bows stay as live: weapon_bow 60 / weapon_oakbow 100 / weapon_hawk 150, twoHand, weaponLevel 1. No Hunter Bow 125.
 
-## Rules
+
+## Live rule (2026-08-26)
+
+Archer / Hunter **does not consume arrows**. Combat never gates on ammo. Shops do not sell arrows (`DATA.AMMO_ORDER = []`, `PVE.buyAmmo` always fails). Flying-arrow animation stays. Item catalog below is leftover data only.
+
+## Rules (catalog leftover)
 
 - Ammo items, stackable. Field `arrowAtk` is what `STATS.arrowAtkFrom` reads.
 - All arrows are elementless (`element: "none"`). Same lock as weapons.

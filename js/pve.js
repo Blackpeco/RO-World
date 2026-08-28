@@ -125,7 +125,7 @@
         sitHp: 30,
         sitMpOn: true,
         sitMp: 20,
-        skills: [null, null, null, null],
+        skills: heroId === "warrior" ? ["bash", null, null, null] : heroId === "assassin" ? ["envenom", null, null, null] : heroId === "hunter" ? ["double_strafe", null, null, null] : [null, null, null, null],
         pots: [
           { id: null, when: "hp", pct: 40 },
           { id: null, when: "mp", pct: 20 },
@@ -203,6 +203,96 @@
       if (save.arrow == null && save.ammo.id) save.arrow = save.ammo.id;
     }
     save.level = save.baseLevel;
+    PVE.migrateSkillRanks(save);
+    return save;
+  };
+
+
+  PVE.migrateSkillRanks = function (save) {
+    if (!save || !save.heroId) return save;
+    const hid = save.heroId;
+    const tree = (DATA.SKILL_TREES && DATA.SKILL_TREES[hid]) || [];
+    const treeIds = {};
+    tree.forEach(function (n) { if (n && n.id) treeIds[n.id] = true; });
+    if (!save.skillRanks || typeof save.skillRanks !== "object") {
+      save.skillRanks = DATA.defaultSkillRanks(hid);
+    }
+    const ranks = save.skillRanks;
+    const hasNew = tree.some(function (n) { return n && (ranks[n.id] || 0) > 0; });
+    const oldW = ["attack", "guard", "magifireblade", "heal", "blade_storm", "sanctuary"];
+    const oldA = ["stab", "veil", "shadowkill", "counter", "nightfall", "phantom"];
+    const oldH = ["arrowshot", "powershot", "focus", "soularrow", "rain", "mark"];
+    const oldList = hid === "warrior" ? oldW : hid === "assassin" ? oldA : hid === "hunter" ? oldH : [];
+    const hasOld = oldList.some(function (id) { return (ranks[id] || 0) > 0; });
+    if (hasOld && !hasNew) {
+      if (hid === "warrior") {
+        if (ranks.attack) ranks.bash = ranks.attack;
+        if (ranks.magifireblade) ranks.magnum_break = ranks.magifireblade;
+        if (ranks.guard) ranks.provoke = ranks.guard;
+        if (ranks.heal) ranks.increase_hp_recovery = ranks.heal;
+        if (ranks.blade_storm) ranks.twohand_mastery = ranks.blade_storm;
+        if (ranks.sanctuary) ranks.endure = ranks.sanctuary;
+        let leftover = 0;
+        Object.keys(ranks).forEach(function (id) {
+          if (treeIds[id] || oldW.indexOf(id) >= 0) return;
+          leftover += Math.max(0, Math.floor(Number(ranks[id]) || 0));
+        });
+        if (leftover > 0) ranks.sword_mastery = Math.min(10, leftover);
+      } else if (hid === "assassin") {
+        if (ranks.stab) ranks.double_attack = ranks.stab;
+        if (ranks.veil) ranks.improve_dodge = ranks.veil;
+        if (ranks.shadowkill) ranks.envenom = ranks.shadowkill;
+        if (ranks.counter) ranks.steal = ranks.counter;
+        if (ranks.nightfall) ranks.hiding = ranks.nightfall;
+        if (ranks.phantom) ranks.detoxify = Math.min(1, ranks.phantom);
+      } else if (hid === "hunter") {
+        if (ranks.powershot) ranks.double_strafe = ranks.powershot;
+        if (ranks.rain) ranks.arrow_shower = ranks.rain;
+        if (ranks.focus) ranks.improve_concentration = ranks.focus;
+        if (ranks.soularrow && !(ranks.owl_eye > 0)) ranks.owl_eye = ranks.soularrow;
+        if (ranks.mark && !(ranks.vulture_eye > 0)) ranks.vulture_eye = ranks.mark;
+        if (ranks.arrowshot) {
+          ranks.owl_eye = Math.min(10, (ranks.owl_eye || 0) + Math.max(0, Math.floor(Number(ranks.arrowshot) || 0)));
+        }
+      }
+    } else if (hid === "hunter" && hasOld) {
+      if (ranks.powershot) ranks.double_strafe = Math.max(ranks.double_strafe || 0, ranks.powershot);
+      if (ranks.rain) ranks.arrow_shower = Math.max(ranks.arrow_shower || 0, ranks.rain);
+      if (ranks.focus) ranks.improve_concentration = Math.max(ranks.improve_concentration || 0, ranks.focus);
+      if (ranks.soularrow) ranks.owl_eye = Math.max(ranks.owl_eye || 0, ranks.soularrow);
+      if (ranks.mark) ranks.vulture_eye = Math.max(ranks.vulture_eye || 0, ranks.mark);
+      if (ranks.arrowshot) {
+        ranks.owl_eye = Math.min(10, (ranks.owl_eye || 0) + Math.max(0, Math.floor(Number(ranks.arrowshot) || 0)));
+      }
+    }
+    Object.keys(ranks).forEach(function (id) {
+      if (!treeIds[id]) delete ranks[id];
+    });
+    tree.forEach(function (n) {
+      if (n && ranks[n.id] == null) ranks[n.id] = 0;
+    });
+    const roots = (DATA.SKILL_ROOTS && DATA.SKILL_ROOTS[hid]) || [];
+    roots.forEach(function (id) {
+      if (!(ranks[id] > 0)) ranks[id] = 1;
+    });
+    if (hid === "hunter") {
+      ["owl_eye", "vulture_eye", "double_strafe", "arrow_shower", "improve_concentration"].forEach(function (id) {
+        if ((ranks[id] || 0) > 10) ranks[id] = 10;
+      });
+      if (ranks.arrow_repel > 1) ranks.arrow_repel = 1;
+    }
+    if (save.autoFarmCfg && Array.isArray(save.autoFarmCfg.skills)) {
+      save.autoFarmCfg.skills = save.autoFarmCfg.skills.map(function (id) {
+        if (id === "attack") return "bash";
+        if (id === "stab") return "envenom";
+        if (id === "arrowshot" || id === "powershot") return "double_strafe";
+        if (id === "rain") return "arrow_shower";
+        if (id === "focus") return "improve_concentration";
+        if (id && DATA.SKILLS[id] && DATA.SKILLS[id].type === "passive") return null;
+        if (id && !treeIds[id]) return null;
+        return id;
+      });
+    }
     return save;
   };
 
@@ -445,6 +535,8 @@
     }
     var learned = PVE.learnedSkillIds(save);
     if (learned.indexOf(skillId) < 0) return { ok: false, reason: "ยังไม่เรียนสกิลนี้" };
+    var def = DATA.SKILLS[skillId];
+    if (def && def.type === "passive") return { ok: false, reason: "สกิลติดตัวใช้ฟาร์มไม่ได้" };
     cfg.skills[i] = skillId;
     return { ok: true };
   };
@@ -696,25 +788,7 @@
   };
 
   PVE.consumeAmmo = function (save, unit) {
-    const src = unit || save;
-    if (!src) return { ok: false, reason: "no-arrow" };
-    let n = STATS.arrowCountFrom(src);
-    if (n <= 0) return { ok: false, reason: "no-arrow" };
-    n -= 1;
-    if (unit) {
-      if (unit.ammo && typeof unit.ammo === "object") unit.ammo.count = n;
-      unit.arrowCount = n;
-    }
-    if (save) {
-      if (!save.ammo || typeof save.ammo !== "object") {
-        save.ammo = { id: (unit && unit.ammo && unit.ammo.id) || save.arrow || "arrow", count: n };
-      } else {
-        save.ammo.count = n;
-      }
-      save.arrowCount = n;
-      if (save.ammo.id) save.arrow = save.ammo.id;
-    }
-    return { ok: true, count: n };
+    return { ok: true, count: save && save.arrowCount != null ? save.arrowCount : 0, skipped: true };
   };
 
   PVE.baseExpToNext = function (lv) {
@@ -899,29 +973,7 @@
   };
 
   PVE.buyAmmo = function (save, id, qty) {
-    PVE.ensureProgress(save);
-    qty = Math.floor(Number(qty) || 0);
-    if (qty !== 1 && qty !== 100) return { ok: false, reason: "จำนวนไม่ถูกต้อง" };
-    const item = DATA.ITEMS && DATA.ITEMS[id];
-    if (!item || item.type !== "ammo") return { ok: false, reason: "ไม่มีลูกธนูนี้" };
-    if (!PVE.isBowHero(save.heroId)) return { ok: false, reason: "อาชีพนี้ซื้อไม่ได้" };
-    const lv = save.baseLevel || save.level || 1;
-    if (item.reqLevel && lv < item.reqLevel) return { ok: false, reason: "เลเวลไม่ถึง" };
-    const cost = (item.price || 0) * qty;
-    if (save.zeno < cost) return { ok: false, reason: "Zeno ไม่พอ" };
-    const extra = DATA.itemWeight(id) * qty;
-    if (!PVE.canCarry(save, extra)) return { ok: false, reason: "น้ำหนักเต็ม แบกไม่ไหว" };
-    save.zeno -= cost;
-    if (!save.ammo || typeof save.ammo !== "object") save.ammo = { id: id, count: 0 };
-    if (save.ammo.id && save.ammo.id !== id) {
-      save.ammo = { id: id, count: qty };
-    } else {
-      save.ammo.id = id;
-      save.ammo.count = (save.ammo.count || 0) + qty;
-    }
-    save.arrow = save.ammo.id;
-    save.arrowCount = save.ammo.count;
-    return { ok: true };
+    return { ok: false, reason: "ร้านไม่ขายลูกธนู" };
   };
 
   PVE.potionCount = function (save, potionId) {
@@ -1055,10 +1107,10 @@
     const wornIsBow = !!(wornWep && (wornWep.weaponClass === "bow" || wornWep.twoHand));
     const isShield = item.type === "shield" || item.slot === "shield" || slotId === "shield";
     if (isBow && (equip.shield || slotId === "weapon" && equip.shield)) {
-      return { ok: false, reason: "ธนูสองมือ ใส่โล่ไม่ได้" };
+      return { ok: false, reason: "อาวุธสองมือ ใส่โล่ไม่ได้" };
     }
     if (isShield && wornIsBow) {
-      return { ok: false, reason: "ธนูสองมือ ใส่โล่ไม่ได้" };
+      return { ok: false, reason: "อาวุธสองมือ ใส่โล่ไม่ได้" };
     }
     return null;
   };
@@ -1182,6 +1234,151 @@
       return { ok: true, success: true, plus: next, cost: cost, chance: chance, itemId: itemId };
     }
     return { ok: true, success: false, plus: cur, cost: cost, chance: chance, itemId: itemId };
+  };
+
+  PVE.inProntera = function (save) {
+    var mapId = save && save.mapId;
+    return mapId !== "field" && mapId !== "bosses";
+  };
+
+  PVE.itemKind = function (id) {
+    if (DATA.POTIONS && DATA.POTIONS[id]) return "potion";
+    if (DATA.MATERIALS && DATA.MATERIALS[id]) return "material";
+    var it = DATA.ITEMS && DATA.ITEMS[id];
+    if (!it) return null;
+    if (it.type === "ammo") return "ammo";
+    return "gear";
+  };
+
+  PVE.stackCount = function (save, id) {
+    if (!save) return 0;
+    var kind = PVE.itemKind(id);
+    if (kind === "potion") {
+      return Math.max(0, Math.floor(Number((save.potions && save.potions[id]) || 0)));
+    }
+    if (kind === "material") {
+      return Math.max(0, Math.floor(Number((save.materials && save.materials[id]) || 0)));
+    }
+    if (kind === "ammo") {
+      if (save.ammo && save.ammo.id === id) {
+        return Math.max(0, Math.floor(Number(save.ammo.count) || 0));
+      }
+      return 0;
+    }
+    if (kind === "gear") return (save.owned && save.owned[id]) ? 1 : 0;
+    return 0;
+  };
+
+  PVE.unequipItem = function (save, itemId) {
+    if (!save || !save.equip) return;
+    DATA.SLOTS.forEach(function (s) {
+      if (save.equip[s.id] === itemId) save.equip[s.id] = null;
+    });
+    PVE.syncVitals(save);
+  };
+
+  PVE._subtractStack = function (save, kind, id, qty) {
+    if (kind === "potion") {
+      save.potions = save.potions || {};
+      var nextP = (save.potions[id] || 0) - qty;
+      save.potions[id] = nextP < 0 ? 0 : nextP;
+    } else if (kind === "material") {
+      save.materials = save.materials || {};
+      var nextM = (save.materials[id] || 0) - qty;
+      save.materials[id] = nextM < 0 ? 0 : nextM;
+    } else if (kind === "ammo") {
+      if (!save.ammo || save.ammo.id !== id) return false;
+      var nextA = (save.ammo.count || 0) - qty;
+      save.ammo.count = nextA < 0 ? 0 : nextA;
+      save.arrowCount = save.ammo.count;
+    }
+    return true;
+  };
+
+  PVE.sellItem = function (save, id, qty) {
+    if (!save) return { ok: false, reason: "ขายไม่ได้" };
+    PVE.ensureProgress(save);
+    var kind = PVE.itemKind(id);
+    if (!kind) return { ok: false, reason: "ขายไม่ได้" };
+    var name = DATA.lootName(id);
+    if (kind === "gear") {
+      if (!save.owned || !save.owned[id]) return { ok: false, reason: "ไม่มี" };
+      var item = DATA.ITEMS[id];
+      var zeno = DATA.sellZeno(item && item.price);
+      PVE.unequipItem(save, id);
+      delete save.owned[id];
+      if (save.refine) delete save.refine[id];
+      save.zeno = (save.zeno || 0) + zeno;
+      return {
+        ok: true,
+        kind: "gear",
+        id: id,
+        name: name,
+        qty: 1,
+        zeno: zeno,
+        toast: "ขาย " + name + " ×1 · +" + zeno + " Zeno",
+      };
+    }
+    if (qty == null || qty === "") qty = 1;
+    qty = Math.floor(Number(qty));
+    if (!isFinite(qty) || qty < 1) return { ok: false, reason: "จำนวนไม่ถูก" };
+    var have = PVE.stackCount(save, id);
+    if (have < 1) return { ok: false, reason: "ไม่มี" };
+    if (qty > have) return { ok: false, reason: "จำนวนไม่ถูก" };
+    var unit = DATA.sellZeno(DATA.buyPriceOf(id));
+    var gained = unit * qty;
+    PVE._subtractStack(save, kind, id, qty);
+    save.zeno = (save.zeno || 0) + gained;
+    return {
+      ok: true,
+      kind: kind,
+      id: id,
+      name: name,
+      qty: qty,
+      zeno: gained,
+      toast: "ขาย " + name + " ×" + qty + " · +" + gained + " Zeno",
+    };
+  };
+
+  PVE.dropItem = function (save, id, qty) {
+    if (!save) return { ok: false, reason: "ไม่มี" };
+    PVE.ensureProgress(save);
+    var kind = PVE.itemKind(id);
+    if (!kind) return { ok: false, reason: "ขายไม่ได้" };
+    var name = DATA.lootName(id);
+    if (kind === "gear") {
+      if (!save.owned || !save.owned[id]) return { ok: false, reason: "ไม่มี" };
+      PVE.unequipItem(save, id);
+      delete save.owned[id];
+      if (save.refine) delete save.refine[id];
+      return {
+        ok: true,
+        kind: "gear",
+        id: id,
+        name: name,
+        qty: 1,
+        zeno: 0,
+        toast: "โยนทิ้ง " + name + " ×1",
+        needsConfirm: true,
+      };
+    }
+    if (qty == null || qty === "") qty = 1;
+    qty = Math.floor(Number(qty));
+    if (!isFinite(qty) || qty < 1) return { ok: false, reason: "จำนวนไม่ถูก" };
+    var have = PVE.stackCount(save, id);
+    if (have < 1) return { ok: false, reason: "ไม่มี" };
+    if (qty > have) return { ok: false, reason: "จำนวนไม่ถูก" };
+    PVE._subtractStack(save, kind, id, qty);
+    return {
+      ok: true,
+      kind: kind,
+      id: id,
+      name: name,
+      qty: qty,
+      zeno: 0,
+      toast: "โยนทิ้ง " + name + " ×" + qty,
+      needsConfirm: qty > 1,
+    };
   };
 
   root.PVE = PVE;

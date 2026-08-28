@@ -2343,8 +2343,8 @@ body.walking #screen {
 .map-avatar, .map-ent { --face-sx: 1; }
 
 .map-avatar.sitting .map-sprite {
-  animation: none !important;
-  transform: translateX(-50%) scaleX(var(--face-sx, 1)) scaleY(0.76) translateY(16%);
+  animation: sitRest 1.6s ease-in-out infinite;
+  transform-origin: center bottom;
 }
 .map-avatar.sitting::after {
   content: "";
@@ -2356,6 +2356,10 @@ body.walking #screen {
   border-radius: 50%;
   background: rgba(20, 12, 8, 0.28);
   pointer-events: none;
+}
+@keyframes sitRest {
+  0%, 100% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(0); }
+  50% { transform: translateX(-50%) scaleX(var(--face-sx, 1)) translateY(-4%); }
 }
 .map-avatar.walking .map-sprite,
 .map-ent.walking .map-sprite {

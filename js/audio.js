@@ -263,6 +263,11 @@
     if (e.poison || e.source === "poison") return false;
     info = info || {};
     if (info.attacker === "hero") {
+      if (info.heroId === "hunter") {
+        const id = e.crit ? "hit_arrow_crit" : "hit_arrow";
+        AUDIO.play(id, { bus: "combat" });
+        return id;
+      }
       if (!AUDIO.isMeleeHero(info.heroId)) return false;
       AUDIO.play("hit_slash", { bus: "combat" });
       return "hit_slash";

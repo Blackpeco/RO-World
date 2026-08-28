@@ -5,6 +5,8 @@ All files: Ogg Vorbis, 44100 Hz, stereo, peak normalized to −1 dBFS.
 
 | filename | duration | what it is | when to play |
 |---|---|---|---|
+| `hit_arrow.ogg` | 0.20s | Short arrow impact / land. Same family as crit, drier. | Hunter arrow-land: play when a hunter hit connects (dmg event). |
+| `hit_arrow_crit.ogg` | 0.26s | Same family as hit_arrow, brighter/punchier. | Hunter crit land. |
 | `hit_slash.ogg` | 0.255s | Metallic sword clang + short flesh/jelly thud. Classic RO melee homage, original. | Player swing-land: play when a hero melee hit connects with a monster (dmg event). Safe at 7 hits/sec. |
 | `mob_poring_attack.ogg` | 0.245s | Cute high slime hop/splat — bouncy, wet. | Mob hits player: field mob id poring. |
 | `mob_fabre_attack.ogg` | 0.235s | Bug nibble + leaf rustle bite. | Mob hits player: field mob id fabre. |

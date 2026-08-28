@@ -147,6 +147,16 @@
       arrowAtk: derived.arrowAtk,
       ammo: derived.ammo || null,
       arrowCount: derived.arrowCount,
+      magnumFireUntil: 0,
+      magnumFireAtk: 0,
+      provokedUntil: 0,
+      provokeDefMul: 1,
+      provokeAtkMul: 1,
+      endureUntil: 0,
+      endureHits: 0,
+      endureMdef: 0,
+      hidden: false,
+      hidingUntil: 0,
     };
   };
 
@@ -248,32 +258,17 @@
 
   /* ---------- locked bow ATK combat ---------- */
   COMBAT.consumeBowAmmo = function (unit, save) {
-    if (typeof PVE !== "undefined" && PVE && typeof PVE.consumeAmmo === "function") {
-      return PVE.consumeAmmo(save, unit);
-    }
-    if (!unit) return { ok: false, reason: "no-arrow" };
-    let n = STATS.arrowCountFrom(unit);
-    if (n <= 0) return { ok: false, reason: "no-arrow" };
-    n -= 1;
-    if (unit.ammo && typeof unit.ammo === "object") unit.ammo.count = n;
-    unit.arrowCount = n;
-    return { ok: true, count: n };
+    return { ok: true, count: unit && unit.arrowCount != null ? unit.arrowCount : 0, skipped: true };
   };
 
   COMBAT.hasBowAmmoForCombat = function (unit, opts) {
-    opts = opts || {};
-    if (opts.arrowAtk != null) return true;
-    if (unit && unit.arrowAtk != null) return true;
-    if (STATS.hasBowAmmo && STATS.hasBowAmmo(unit)) return true;
-    if (opts && opts !== unit && STATS.hasBowAmmo && STATS.hasBowAmmo(opts)) return true;
-    return false;
+    return true;
   };
 
   COMBAT.bowSkillGate = function (unit, opts) {
     opts = opts || {};
     const holds = (STATS.holdsBow && STATS.holdsBow(unit)) || (unit && unit.weaponClass === "bow") || opts.hasBow;
     if (!holds) return { ok: false, reason: "no-bow" };
-    if (!COMBAT.hasBowAmmoForCombat(unit, opts)) return { ok: false, reason: "no-arrow" };
     return { ok: true };
   };
 
@@ -301,10 +296,11 @@
       baseWeaponAtk: opts.baseWeaponAtk != null ? opts.baseWeaponAtk : (wep && wep.weaponAtk) || (unit && unit.baseWeaponAtk) || 0,
       weaponLevel: opts.weaponLevel != null ? opts.weaponLevel : (wep && wep.weaponLevel) || (unit && unit.weaponLevel) || 1,
       refine: opts.refine != null ? opts.refine : (wepId ? STATS.refineOf(unit.refine, wepId) : (unit && unit.refinePlus) || 0),
-      arrowAtk: opts.arrowAtk != null ? opts.arrowAtk : STATS.arrowAtkFrom(unit),
+      arrowAtk: opts.arrowAtk != null ? opts.arrowAtk : 0,
       equipAtk: opts.equipAtk != null ? opts.equipAtk : (unit && unit.equipAtk) || 0,
       consumableAtk: opts.consumableAtk || 0,
       variance: opts.variance || "mid",
+      rng: opts.rng,
       size: opts.size || "M",
       element: opts.element != null ? opts.element : 1,
       atkPct: opts.atkPct,
@@ -363,6 +359,13 @@
   };
 
   COMBAT.knockbackTiles = function (ent, from, tiles, isWalkable) {
+    const unit = ent && ent.unit ? ent.unit : ent;
+    if (unit && unit.endureHits > 0 && COMBAT.buffActive(unit.endureUntil)) {
+      unit.endureHits -= 1;
+      const x = (ent && ent.x) || 0;
+      const y = (ent && ent.y) || 0;
+      return { dx: 0, dy: 0, x: x, y: y, endured: true };
+    }
     tiles = Math.max(0, Math.floor(Number(tiles) || 0));
     const start = { x: (ent && ent.x) || 0, y: (ent && ent.y) || 0 };
     let cur = { x: start.x, y: start.y };
@@ -407,7 +410,10 @@
     const crit = !isSkill && !!conn.crit;
     let atk = opts.atk;
     if (atk == null) {
-      const bow = COMBAT.unitBowAtk(actor, Object.assign({}, opts, { variance: crit ? "max" : (opts.variance || "mid") }));
+      const bow = COMBAT.unitBowAtk(actor, Object.assign({}, opts, {
+        variance: crit ? "max" : (opts.variance != null ? opts.variance : "roll"),
+        rng: opts.rng || rng,
+      }));
       if (!bow.ok) return { hit: false, damage: 0, crit: false, reason: bow.reason || "no-bow", raw: 0 };
       atk = bow.atk;
     }
@@ -464,7 +470,10 @@
 
     if (!opts.ignoreArmor) {
       if (isPhysical) {
-        const hardDef = target.hardDef || 0;
+        let hardDef = target.hardDef || 0;
+        if (COMBAT.buffActive(target.provokedUntil) && target.provokeDefMul != null) {
+          hardDef = hardDef * (Number(target.provokeDefMul) || 1);
+        }
         const bypass = opts.bypass != null ? opts.bypass : 0;
         const defReduce = opts.defReduce || 0;
         /* opts.defReversal: Ice Pick hook — not implemented. */
@@ -472,7 +481,10 @@
         let afterHard = Math.floor(atkPart * hf);
         atkPart = afterHard;
         if (!crit) {
-          const baseSoft = target.softDef != null ? target.softDef : (target.def || 0);
+          let baseSoft = target.softDef != null ? target.softDef : (target.def || 0);
+          if (COMBAT.buffActive(target.provokedUntil) && target.provokeDefMul != null) {
+            baseSoft = baseSoft * (Number(target.provokeDefMul) || 1);
+          }
           const bonusA = (target.softDefBonusA || 0) + (opts.softBonusA || 0);
           const bonusB = (target.softDefBonusB || 0) + (opts.softBonusB || 0);
           const totalSoft = STATS.totalSoft ? STATS.totalSoft(baseSoft, bonusA, bonusB) : Math.floor((baseSoft + bonusA) * (1 + bonusB / 100));
@@ -481,7 +493,10 @@
         if (atkPart < 0) atkPart = 0;
       }
 
-      const softMdef = target.mdef != null ? target.mdef : (target.softMdef || 0);
+      let softMdef = target.mdef != null ? target.mdef : (target.softMdef || 0);
+      if (COMBAT.buffActive(target.endureUntil) && target.endureMdef) {
+        softMdef += Number(target.endureMdef) || 0;
+      }
       const hardMdef = Math.max(0, Math.min(100, target.hardMdef || 0));
       matkPart = Math.max(0, matkPart - softMdef);
       matkPart = matkPart * (1 - hardMdef / 100);
@@ -663,9 +678,39 @@
   };
 
   COMBAT.skillAnimKind = function (skillId, def) {
-    if (skillId === "heal" || skillId === "sanctuary") return "heal";
+    if (skillId === "heal" || skillId === "sanctuary" || skillId === "detoxify" || skillId === "increase_hp_recovery") return "heal";
     if (def && def.type === "self") return "buff";
     return "attack";
+  };
+
+  COMBAT.nowMs = function () {
+    return Date.now();
+  };
+
+  COMBAT.buffActive = function (until) {
+    return !!(until && COMBAT.nowMs() < until);
+  };
+
+  COMBAT.holdsDagger = function (unit) {
+    if (!unit) return false;
+    if (unit.weaponClass === "dagger") return true;
+    const item = STATS.weaponItem && STATS.weaponItem(unit.equip || unit);
+    if (item && item.weaponClass === "dagger") return true;
+    if (!unit.weaponClass && !(item && item.weaponClass) && unit.heroId === "assassin") return true;
+    return false;
+  };
+
+  COMBAT.breakHide = function (unit) {
+    if (!unit || !unit.hidden) return false;
+    unit.hidden = false;
+    unit.hidingUntil = 0;
+    return true;
+  };
+
+  COMBAT.toastOrLog = function (state, msg) {
+    if (state) COMBAT.pushLog(state, '<span class="log-buff">' + msg + "</span>");
+    const UI = (typeof root !== "undefined" && root.UI) ? root.UI : (typeof globalThis !== "undefined" && globalThis.UI);
+    if (UI && UI.toast) UI.toast(msg);
   };
 
   /* ---------- start-of-turn: poison, regen, buffs, CDs ---------- */
@@ -1150,6 +1195,45 @@
       case "improve_concentration":
         body = "AGI/DEX +" + Math.round(STATS.improveConcentrationPct(show) * 100) + "% นาน " + STATS.improveConcentrationDuration(show) + "s";
         break;
+      case "sword_mastery":
+        body = "Weapon ATK +" + STATS.swordMasteryAtk(show) + " (ดาบมือเดียว)";
+        break;
+      case "twohand_mastery":
+        body = "Weapon ATK +" + STATS.twohandMasteryAtk(show) + " (ดาบสองมือ)";
+        break;
+      case "increase_hp_recovery":
+        body = "ฟื้น HP เพิ่มทุกติ๊ก ตามเลเวลสกิล";
+        break;
+      case "bash":
+        body = "ดาเมจ " + Math.round(STATS.bashMod(show) * 100) + "% ATK";
+        break;
+      case "magnum_break":
+        body = "ไฟ " + Math.round(STATS.magnumBreakMod(show) * 100) + "% ATK AoE ดีด 2 ช่อง +20% ATK 10s";
+        break;
+      case "provoke":
+        body = "สำเร็จ " + STATS.provokeSuccess(show, 0, 0) + "%: DEF −" + Math.round(STATS.provokeDefReduce(show) * 100) + "% ATK +" + Math.round(STATS.provokeAtkBonus(show) * 100) + "% นาน 30s";
+        break;
+      case "endure":
+        body = "MDEF +" + STATS.endureMdef(show) + " ทน 7 ฮิตไม่วูบ นาน 10s";
+        break;
+      case "double_attack":
+        body = "โอกาส " + Math.round(STATS.doubleAttackChance(show) * 100) + "% โจมตีซ้ำ 100% ATK (มีดสั้น / โจมตีปกติ)";
+        break;
+      case "improve_dodge":
+        body = "FLEE +" + STATS.improveDodgeFlee(show);
+        break;
+      case "steal":
+        body = "ขโมย Zeno หรือดรอปจากมอนสนาม (สำเร็จตาม DEX)";
+        break;
+      case "hiding":
+        body = "ซ่อนตัว มอนไม่จ้อง เสีย 1 SP ทุก " + STATS.hidingSpIntervalSec(show) + "s";
+        break;
+      case "envenom":
+        body = "ดาเมจ 100% ATK +" + STATS.envenomBonus(show) + " โอกาสพิษ " + Math.round(STATS.envenomPoisonChance(show) * 100) + "%";
+        break;
+      case "detoxify":
+        body = "ถอนพิษบนตัวเอง";
+        break;
       default:
         body = (def.button && def.button.indexOf(" — ") >= 0) ? def.button.split(" — ").slice(1).join(" — ") : (def.button || "");
     }
@@ -1200,6 +1284,12 @@
     if (actor.nextAtkBonus) {
       atkR = (atkR || 0) + actor.nextAtkBonus;
       actor.nextAtkBonus = 0;
+    }
+    if (COMBAT.buffActive(actor.magnumFireUntil) && actor.magnumFireAtk) {
+      atkR = (atkR || 0) * (1 + Number(actor.magnumFireAtk) || 0);
+    }
+    if (COMBAT.buffActive(actor.provokedUntil) && actor.provokeAtkMul) {
+      atkR = (atkR || 0) * (Number(actor.provokeAtkMul) || 1);
     }
     const rng = state.rng;
     const isMagic = extra.isMagic || ((atkR || 0) === 0 && (matkR || 0) > 0);
@@ -1271,6 +1361,14 @@
     if (target.hp <= 0) {
       COMBAT.endBattle(state, actor);
     }
+    if (extra.auto && !extra._doubleProc && !state.over && target.hp > 0 && COMBAT.holdsDagger(actor)) {
+      const lv = COMBAT.rankOf(actor, "double_attack");
+      const chance = STATS.doubleAttackChance ? STATS.doubleAttackChance(lv) : 0;
+      if (lv > 0 && chance > 0 && state.rng && state.rng.chance(chance * 100)) {
+        COMBAT.pushLog(state, '<span class="log-buff">⚡ ' + actor.name + " โจมตีสองครั้ง!</span>");
+        return COMBAT.doHitAttack(state, actor, target, skillName, 1, 0, { auto: true, _doubleProc: true });
+      }
+    }
     return { hit: true, damage: applied.dealt, crit: calc.crit, raw: calc.damage, applied: applied };
   };
 
@@ -1284,13 +1382,19 @@
       if (!gate.ok) return gate;
     }
     const target = COMBAT.opponentOf(state, actor);
+    if (skillId === "hiding" && actor.hidden) {
+      COMBAT.breakHide(actor);
+      COMBAT.pushLog(state, '<span class="log-buff">👤 ' + actor.name + " ออกจากที่ซ่อน</span>");
+      return { ok: true, toggled: true };
+    }
     COMBAT.spendAndCd(actor, def);
+    if (skillId !== "hiding") COMBAT.breakHide(actor);
     COMBAT.emitFx(state, { kind: "act", side: actor.side, skillId: skillId, anim: COMBAT.skillAnimKind(skillId, def) });
 
     switch (skillId) {
       case "attack": {
         if (STATS.holdsBow(actor) && COMBAT.hasBowAmmoForCombat(actor)) {
-          COMBAT.doBowHit(state, actor, target, def.name, { variance: "mid" });
+          COMBAT.doBowHit(state, actor, target, def.name);
           break;
         }
         const sc = COMBAT.atkScale(actor, "attack", 1.4, 0);
@@ -1511,21 +1615,21 @@
       }
       case "double_strafe": {
         const lv = COMBAT.rankOf(actor, "double_strafe");
-        const bow = COMBAT.unitBowAtk(actor, { variance: "mid" });
+        const bow = COMBAT.unitBowAtk(actor, { variance: "roll", rng: state && state.rng });
         if (!bow.ok) return { ok: false, reason: bow.reason || "no-bow" };
         COMBAT.doBowHit(state, actor, target, def.name, { skill: true, atk: bow.atk, skillMod: STATS.doubleStrafeMod(lv) });
         break;
       }
       case "arrow_shower": {
         const lv = COMBAT.rankOf(actor, "arrow_shower");
-        const bow = COMBAT.unitBowAtk(actor, { variance: "mid" });
+        const bow = COMBAT.unitBowAtk(actor, { variance: "roll", rng: state && state.rng });
         if (!bow.ok) return { ok: false, reason: bow.reason || "no-bow" };
         const res = COMBAT.doBowHit(state, actor, target, def.name, { skill: true, atk: bow.atk, skillMod: STATS.arrowShowerMod(lv) });
         if (res && res.hit) COMBAT.knockbackTiles(target, actor, 2);
         break;
       }
       case "arrow_repel": {
-        const bow = COMBAT.unitBowAtk(actor, { variance: "mid" });
+        const bow = COMBAT.unitBowAtk(actor, { variance: "roll", rng: state && state.rng });
         if (!bow.ok) return { ok: false, reason: bow.reason || "no-bow" };
         const res = COMBAT.doBowHit(state, actor, target, def.name, { skill: true, atk: bow.atk, skillMod: STATS.arrowRepelMod(COMBAT.rankOf(actor, "arrow_repel")) });
         if (res && res.hit) COMBAT.knockbackTiles(target, actor, 6);
@@ -1552,6 +1656,121 @@
         );
         break;
       }
+      case "sword_mastery":
+      case "twohand_mastery":
+      case "increase_hp_recovery":
+      case "double_attack":
+      case "improve_dodge":
+        COMBAT.pushLog(state, '<span class="log-buff">' + actor.name + " ใช้ " + def.name + " (ติดตัว)</span>");
+        break;
+      case "bash": {
+        const lv = COMBAT.rankOf(actor, "bash");
+        COMBAT.doHitAttack(state, actor, target, def.name, STATS.bashMod(lv), 0);
+        break;
+      }
+      case "magnum_break": {
+        const lv = COMBAT.rankOf(actor, "magnum_break");
+        const res = COMBAT.doHitAttack(state, actor, target, def.name, STATS.magnumBreakMod(lv), 0);
+        actor.magnumFireUntil = COMBAT.nowMs() + 10000;
+        actor.magnumFireAtk = 0.20;
+        if (res && res.hit) COMBAT.knockbackTiles(target, actor, 2);
+        COMBAT.pushLog(state, '<span class="log-buff">🔥 ' + actor.name + " แมกนัมเบรก — โจมตีกายภาพ +20% นาน 10s</span>");
+        break;
+      }
+      case "provoke": {
+        const lv = COMBAT.rankOf(actor, "provoke");
+        const dex = (actor.totalPts && actor.totalPts.dex) || actor.dex || 0;
+        const luk = (actor.totalPts && actor.totalPts.luk) || actor.luk || 0;
+        const rate = STATS.provokeSuccess(lv, dex, luk);
+        if (state.rng && state.rng.chance(rate)) {
+          target.provokedUntil = COMBAT.nowMs() + 30000;
+          target.provokeDefMul = 1 - STATS.provokeDefReduce(lv);
+          target.provokeAtkMul = 1 + STATS.provokeAtkBonus(lv);
+          COMBAT.pushLog(
+            state,
+            '<span class="log-buff">💢 ' + actor.name + " ยั่วยุสำเร็จ DEF −" +
+              Math.round(STATS.provokeDefReduce(lv) * 100) + "% ATK +" +
+              Math.round(STATS.provokeAtkBonus(lv) * 100) + "%</span>"
+          );
+        } else {
+          COMBAT.toastOrLog(state, "ยั่วยัง");
+        }
+        break;
+      }
+      case "endure": {
+        const lv = COMBAT.rankOf(actor, "endure");
+        actor.endureUntil = COMBAT.nowMs() + 10000;
+        actor.endureHits = 7;
+        actor.endureMdef = STATS.endureMdef(lv);
+        COMBAT.pushLog(state, '<span class="log-buff">🛡️ ' + actor.name + " เอนเดอร์ MDEF +" + actor.endureMdef + " ทน 7 ฮิต นาน 10s</span>");
+        break;
+      }
+      case "steal": {
+        if (target.isHero || target.isBoss || !target.isMonster) {
+          COMBAT.toastOrLog(state, "ขโมยไม่สำเร็จ");
+          break;
+        }
+        const lv = COMBAT.rankOf(actor, "steal");
+        const dex = (actor.totalPts && actor.totalPts.dex) || actor.dex || 0;
+        const rate = STATS.stealSuccess(lv, dex);
+        if (!(state.rng && state.rng.chance(rate))) {
+          COMBAT.toastOrLog(state, "ขโมยไม่สำเร็จ");
+          break;
+        }
+        const save = state.save;
+        const mobId = target.heroId || target.monsterId;
+        const mob = (DATA.findMonster && DATA.findMonster(mobId)) || null;
+        let stole = "";
+        if (mob && mob.drops && mob.drops.length && save && root.PVE) {
+          const pick = mob.drops[Math.floor(state.rng.next() * mob.drops.length)];
+          if (pick && pick.id) {
+            const kind = pick.kind || "potion";
+            if (kind === "material") {
+              save.materials = save.materials || {};
+              save.materials[pick.id] = (save.materials[pick.id] || 0) + 1;
+            } else if (kind === "item") {
+              save.owned = save.owned || {};
+              save.owned[pick.id] = true;
+            } else {
+              save.potions = save.potions || {};
+              save.potions[pick.id] = (save.potions[pick.id] || 0) + 1;
+            }
+            stole = (DATA.lootName && DATA.lootName(pick.id)) || pick.id;
+          }
+        }
+        if (!stole) {
+          const z = Math.max(1, Math.floor(Number(target.level) || (mob && mob.level) || 1));
+          if (save) save.zeno = (save.zeno || 0) + z;
+          stole = z + " Zeno";
+        }
+        COMBAT.toastOrLog(state, "ขโมยสำเร็จ");
+        COMBAT.pushLog(state, '<span class="log-heal">🖐️ ' + actor.name + " ขโมย " + stole + "</span>");
+        break;
+      }
+      case "hiding":
+        actor.hidden = true;
+        actor.hidingUntil = 0;
+        actor._hideAcc = 0;
+        COMBAT.pushLog(state, '<span class="log-buff">👤 ' + actor.name + " ซ่อนตัว</span>");
+        break;
+      case "envenom": {
+        const lv = COMBAT.rankOf(actor, "envenom");
+        const atk = COMBAT.effectiveAtk(actor) || 0;
+        const bonus = STATS.envenomBonus(lv);
+        const mod = atk > 0 ? (atk + bonus) / atk : 1;
+        const res = COMBAT.doHitAttack(state, actor, target, def.name, mod, 0);
+        if (res && res.hit && !state.over) {
+          const pch = STATS.envenomPoisonChance(lv) * 100;
+          if (state.rng && state.rng.chance(pch) && COMBAT.rollStatus(target, state.rng)) {
+            COMBAT.applyPoison(state, target, 0.2 * actor.matk, 3, def.name);
+          }
+        }
+        break;
+      }
+      case "detoxify":
+        actor.poisons = [];
+        COMBAT.pushLog(state, '<span class="log-heal">✨ ' + actor.name + " ถอนพิษ</span>");
+        break;
       default:
         return { ok: false, reason: "unhandled" };
     }
@@ -1971,6 +2190,17 @@
     unit.wrathAtk = 0;
     unit.wrathCrit = 0;
     unit.wrathCritMult = 0;
+    unit.magnumFireUntil = 0;
+    unit.magnumFireAtk = 0;
+    unit.provokedUntil = 0;
+    unit.provokeDefMul = 1;
+    unit.provokeAtkMul = 1;
+    unit.endureUntil = 0;
+    unit.endureHits = 0;
+    unit.endureMdef = 0;
+    unit.hidden = false;
+    unit.hidingUntil = 0;
+    unit._hideAcc = 0;
   };
 
   /* ---------- serialize for PvP state codes ---------- */
@@ -2084,6 +2314,19 @@
     while (unit.poisons && unit.poisons.length && unit._poisonAcc >= 1000) {
       unit._poisonAcc -= 1000;
       COMBAT.tickPoisons(state, unit);
+    }
+    if (unit.hidden) {
+      const hideLv = COMBAT.rankOf(unit, "hiding");
+      const interval = Math.max(1, (STATS.hidingSpIntervalSec ? STATS.hidingSpIntervalSec(hideLv) : 1)) * 1000;
+      unit._hideAcc = (unit._hideAcc || 0) + dt;
+      while (unit.hidden && unit._hideAcc >= interval) {
+        unit._hideAcc -= interval;
+        unit.mp = Math.max(0, (unit.mp || 0) - 1);
+        if (unit.mp <= 0) {
+          COMBAT.breakHide(unit);
+          COMBAT.pushLog(state, '<span class="log-buff">👤 ' + unit.name + " หมด SP — ออกจากที่ซ่อน</span>");
+        }
+      }
     }
   };
 

@@ -17,6 +17,7 @@
   MAP.COLS = 45;
   MAP.ROWS = 33;
   MAP.CITY = 80;
+  MAP.sitting = false;
 
   function hashXY(x, y) {
     let h = (x * 374761393 + y * 668265263) | 0;
@@ -1355,6 +1356,11 @@
   };
 
   MAP.getPos = function () {
+    if (!saveRef) {
+      const z = zone();
+      const s = z && z.spawn;
+      return { x: (s && s.x) || 2, y: (s && s.y) || 7 };
+    }
     return pos();
   };
 
@@ -1721,13 +1727,7 @@
 
   function tryStep(dx, dy) {
     const p = pos();
-    if (saveRef && saveRef.autoFarm && root.WORLD && WORLD.playerEntity) {
-      const pe = WORLD.playerEntity();
-      if (pe && pe.sitting) {
-        pe.sitting = false;
-        if (pe.unit) pe.unit.sitting = false;
-      }
-    }
+    if (MAP.isSitting()) MAP.setSitting(false);
     if (saveRef && root.PVE && PVE.weightState && PVE.weightState(saveRef).full) {
       if (!MAP._weightToastAt || Date.now() - MAP._weightToastAt > 1500) {
         MAP._weightToastAt = Date.now();
@@ -2056,6 +2056,11 @@
     if (!hostEl || !saveRef) return;
     const tag = (ev.target && ev.target.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (ev.key === "n" || ev.key === "N") {
+      ev.preventDefault();
+      if (root.App && App.toggleSit) App.toggleSit();
+      return;
+    }
     const axis = keyAxis(ev.key);
     if (!axis) return;
     ev.preventDefault();
@@ -2152,11 +2157,7 @@
   }
 
   function spriteSrc(heroId) {
-    let sitting = false;
-    if (root.WORLD && WORLD.playerEntity) {
-      const pe = WORLD.playerEntity();
-      sitting = !!(pe && pe.sitting);
-    }
+    const sitting = MAP.isSitting();
     const unit = { heroId: heroId, facing: (saveRef && saveRef.facing) || MAP.facing || "s", walkFrame: sitting ? 0 : (saveRef && saveRef.walkFrame), sitting: sitting };
     if (root.FX && FX.spriteSrc) return FX.spriteSrc(heroId, unit);
     return "assets/chars/" + (heroId || "warrior") + "_s.png";
@@ -2393,11 +2394,7 @@
       avatar.style.zIndex = String(20 + ((p.y * 2) | 0) + 3);
       const hid = (saveRef && saveRef.heroId) || "warrior";
       const face = (saveRef && saveRef.facing) || MAP.facing || "s";
-      let sitting = false;
-      if (root.WORLD && WORLD.playerEntity) {
-        const pe = WORLD.playerEntity();
-        sitting = !!(pe && pe.sitting);
-      }
+      const sitting = MAP.isSitting();
       avatar.classList.toggle("sitting", sitting);
       const img = avatar.querySelector("img.map-sprite");
       const src = spriteSrc(hid);
@@ -2689,9 +2686,30 @@
 
   MAP.resumeAutoIfNeeded = function (save) {
     saveRef = save;
-    if (root.WORLD && WORLD.live && WORLD.live()) return;
+    if (root.WORLD && WORLD.live && WORLD.live()) {
+      if (WORLD.syncLiveHero) WORLD.syncLiveHero(save);
+      if (WORLD.kickAutoFarm) WORLD.kickAutoFarm();
+      return;
+    }
     if (save && save.autoFarm && zoneId === "field" && hostEl) startAutoLoop();
   };
+
+  MAP.isSitting = function () {
+    if (root.WORLD && WORLD.playerEntity) {
+      var pe = WORLD.playerEntity();
+      if (pe) return !!pe.sitting;
+    }
+    return !!MAP.sitting || !!(saveRef && saveRef.sitting);
+  };
+  MAP.setSitting = function (on) {
+    on = !!on;
+    MAP.sitting = on;
+    if (saveRef) saveRef.sitting = on;
+    if (root.WORLD && WORLD.setSitting && WORLD.playerEntity && WORLD.playerEntity()) WORLD.setSitting(on);
+    paintPlayer();
+    return on;
+  };
+  MAP.toggleSit = function () { return MAP.setSitting(!MAP.isSitting()); };
 
   MAP.tryStep = tryStep;
 
