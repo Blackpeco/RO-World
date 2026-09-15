@@ -158,7 +158,7 @@
   };
 
   FX.mob404s = [];
-  FX.SPRITE_VER = "ui3-swordsman-2";
+  FX.SPRITE_VER = "ui3-swordsman-3";
   FX.POSE_MS = { hit: 360, skill: 420, atk: 280 };
   FX.COMBAT_STANCE_MS = 2800;
   FX.WALK_FRAME_MS = 240;

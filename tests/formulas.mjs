@@ -2568,6 +2568,9 @@ console.log("swordsman sprites, ready stance, barber hair");
     "warrior_ready_s.png", "warrior_ready_e.png", "warrior_ready_n.png",
     "warrior_ready_w.png",
     "warrior_atk_s.png", "warrior_atk_1.png", "warrior_atk_2.png",
+    "warrior_atk_3.png", "warrior_atk_4.png", "warrior_atk_5.png",
+    "warrior_doll.png", "warrior_w.png", "warrior_sw.png",
+    "warrior_sit_w.png", "warrior_hit_e.png",
   ];
   files.forEach(function (name) {
     assert(existsSync(join(root, "assets/chars/" + name)), "exists assets/chars/" + name);
@@ -2582,7 +2585,7 @@ console.log("swordsman sprites, ready stance, barber hair");
   assert(DATA.HAIR_COLOR_IDS.length >= 6, "at least 6 hair colors");
   assert(DATA.defaultHairColor("nope") === "blonde", "invalid hair falls back to blonde");
   assert(FX.hairColorOf({ hairColor: "red" }) === "red", "hairColorOf red");
-  assert(FX.SPRITE_VER === "ui3-swordsman-2", "sprite cache bump ui3-swordsman-2");
+  assert(FX.SPRITE_VER === "ui3-swordsman-3", "sprite cache bump ui3-swordsman-3");
   assert(typeof WORLD.setCombatPose === "function" && typeof WORLD.clearCombatPose === "function", "WORLD pose helpers");
 }
 
