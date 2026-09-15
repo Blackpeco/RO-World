@@ -534,7 +534,7 @@
     }
 
     const LOCK_BLOCK = "#DCHNRTrhF";
-    const LOCK_NPC = "WPSKG";
+    const LOCK_NPC = "WPSKGM";
 
     function put(x, y, ch, walk) {
       if (y < 0 || x < 0 || y >= n || x >= n) return;
@@ -720,6 +720,18 @@
     }
     put(kafra.x, kafra.y, "S", true);
 
+    // Barber on the west ribbon, near the weapon shop.
+    const barber = { x: 32, y: 40 };
+    if (!walks[barber.y] || !walks[barber.y][barber.x] || lockedTile(kind[barber.y][barber.x])) {
+      for (let x = 28; x <= 36; x++) {
+        if (walks[40] && walks[40][x] && !lockedTile(kind[40][x])) {
+          barber.x = x;
+          break;
+        }
+      }
+    }
+    put(barber.x, barber.y, "M", true);
+
     // 12. East field gatehouse — only functional exit. 3x3 G walk pad.
     fill(n - 3, cy - 1, n - 1, cy + 1, "G", true);
     fill(n - 4, cy - 4, n - 1, cy - 3, "#", false);
@@ -877,7 +889,7 @@
     function canPlantB(x, y) {
       if (!kind[y] || !walks[y][x]) return false;
       const ch = kind[y][x];
-      if ("WPSKGFFfTH#RrhCDN".indexOf(ch) >= 0) return false;
+      if ("WPSKGMFFfTH#RrhCDN".indexOf(ch) >= 0) return false;
       return ch === "." || ch === "~" || ch === "A";
     }
     [
@@ -1020,7 +1032,7 @@
       fountain: { x: cx, y: cy },
       houseLots: { sw: swLotN, se: seLotN },
       lotPts: { sw: swLotPts, se: seLotPts },
-      npcs: { W: wShop, P: pShop, S: kafra, K: { x: cx, y: 16 }, G: { x: n - wallT, y: cy } },
+      npcs: { W: wShop, P: pShop, S: kafra, M: barber, K: { x: cx, y: 16 }, G: { x: n - wallT, y: cy } },
       reach: reach,
     };
   }
@@ -1158,6 +1170,7 @@
       { ch: "W", src: "assets/chars/warrior_s.png", name: "อาวุธ" },
       { ch: "P", src: "assets/chars/hunter_s.png", name: "ยา" },
       { ch: "S", src: "assets/chars/angel.png", name: "คาฟร้า" },
+      { ch: "M", src: "assets/chars/warrior_s.png", name: "ช่างตัดผม" },
     ];
     npcDefs.forEach(function (n) {
       const pos = (cityGrid.npcs && cityGrid.npcs[n.ch]) || null;
@@ -1592,6 +1605,16 @@
       walkTimer = null;
     }
     walking = false;
+    scheduleIdleSprite();
+  }
+
+  function scheduleIdleSprite() {
+    if (MAP._idleT) clearTimeout(MAP._idleT);
+    const wait = ((root.FX && FX.WALK_FRAME_MS) || 240) + 30;
+    MAP._idleT = setTimeout(function () {
+      MAP._idleT = null;
+      if (hostEl && !walking) paintPlayer();
+    }, wait);
   }
 
   function stopAuto() {
@@ -1655,6 +1678,7 @@
     if (ch === "W") return { id: "gear", name: "ร้านอาวุธ / อุปกรณ์" };
     if (ch === "P") return { id: "potion", name: "ร้านยา" };
     if (ch === "S") return { id: "kafra", name: "คาฟร้า" };
+    if (ch === "M") return { id: "barber", name: "ช่างตัดผม" };
     if (ch === "K") return { id: "castle", name: "ปราสาทโลหิต" };
     if (ch === "G") return { id: "field", name: "ประตูทุ่ง" };
     return null;
@@ -1764,10 +1788,13 @@
     storePos(nx, ny);
     if (saveRef) {
       saveRef.walkFrame = saveRef.walkFrame === 1 ? 2 : 1;
+      saveRef._stepAt = Date.now();
     }
+    if (root.WORLD && WORLD.clearCombatPose) WORLD.clearCombatPose();
     MAP.renderVisible();
     const av = hostEl && hostEl.querySelector(".map-avatar");
     if (av && root.FX && FX.markWalk) FX.markWalk(av);
+    scheduleIdleSprite();
     if (root.WORLD && WORLD.adjacentAggro) WORLD.adjacentAggro(nx, ny);
     return true;
   }
@@ -1805,10 +1832,15 @@
       if (saveRef) saveRef.facing = (root.FX && FX.facingFromDelta) ? FX.facingFromDelta(step.x - p.x, step.y - p.y) : "s";
       MAP.facing = saveRef && saveRef.facing;
       storePos(step.x, step.y);
-      if (saveRef) saveRef.walkFrame = saveRef.walkFrame === 1 ? 2 : 1;
+      if (saveRef) {
+        saveRef.walkFrame = saveRef.walkFrame === 1 ? 2 : 1;
+        saveRef._stepAt = Date.now();
+      }
+      if (root.WORLD && WORLD.clearCombatPose) WORLD.clearCombatPose();
       MAP.renderVisible();
       const av = hostEl && hostEl.querySelector(".map-avatar");
       if (av && root.FX && FX.markWalk) FX.markWalk(av);
+      scheduleIdleSprite();
       if (root.WORLD && WORLD.adjacentAggro) WORLD.adjacentAggro(step.x, step.y);
       if (root.WORLD && WORLD.holdIfInRange && WORLD.holdIfInRange()) {
         walking = false;
@@ -2156,9 +2188,31 @@
     stopPad();
   }
 
-  function spriteSrc(heroId) {
+  function heroUnit(heroId) {
     const sitting = MAP.isSitting();
-    const unit = { heroId: heroId, facing: (saveRef && saveRef.facing) || MAP.facing || "s", walkFrame: sitting ? 0 : (saveRef && saveRef.walkFrame), sitting: sitting };
+    const unit = {
+      heroId: heroId,
+      facing: (saveRef && saveRef.facing) || MAP.facing || "s",
+      walkFrame: sitting ? 0 : (saveRef && saveRef.walkFrame),
+      lastStepAt: sitting ? 0 : (saveRef && saveRef._stepAt) || 0,
+      walking: !sitting && MAP.isWalking(),
+      sitting: sitting,
+      hairColor: saveRef && saveRef.hairColor,
+    };
+    if (root.WORLD && WORLD.playerUnit) {
+      const pu = WORLD.playerUnit();
+      if (pu && pu.heroId === heroId) {
+        unit.pose = pu.pose;
+        unit.poseUntil = pu.poseUntil;
+        unit.combatUntil = pu.combatUntil;
+        if (pu.hairColor) unit.hairColor = pu.hairColor;
+      }
+    }
+    return unit;
+  }
+
+  function spriteSrc(heroId) {
+    const unit = heroUnit(heroId);
     if (root.FX && FX.spriteSrc) return FX.spriteSrc(heroId, unit);
     return "assets/chars/" + (heroId || "warrior") + "_s.png";
   }
@@ -2169,7 +2223,7 @@
       const ch = cityGrid.cells[x + "," + y] || "";
       if (ch === "~" || ch === "F" || ch === "f" || ch === "L" || ch === "B") return "plaza";
       const walk = !!(cityGrid.walkable[y] && cityGrid.walkable[y][x]);
-      if (walk && (!ch || ch === "W" || ch === "P" || ch === "S" || ch === "K" || ch === "G")) return "path";
+      if (walk && (!ch || ch === "W" || ch === "P" || ch === "S" || ch === "M" || ch === "K" || ch === "G")) return "path";
       return "lawn";
     }
     if (zid === "field") {
@@ -2398,7 +2452,10 @@
       avatar.classList.toggle("sitting", sitting);
       const img = avatar.querySelector("img.map-sprite");
       const src = spriteSrc(hid);
-      if (img && img.getAttribute("src") !== src) img.src = src;
+      if (img) {
+        if (root.FX && FX.applyHeroImg) FX.applyHeroImg(img, src, heroUnit(hid));
+        else if (img.getAttribute("src") !== src) img.src = src;
+      }
       if (root.FX && FX.applyFacing) FX.applyFacing(avatar, face);
     }
     hostEl.querySelectorAll(".map-tile").forEach(function (el) {
@@ -2433,6 +2490,7 @@
       else if (ch === "W") cls += " npc street";
       else if (ch === "P") cls += " npc street";
       else if (ch === "S") cls += " npc street";
+      else if (ch === "M") cls += " npc street";
       else if (ch === "K") cls += " npc warp";
       else if (ch === "G") cls += " gate warp";
       else if (walk) cls += " street";

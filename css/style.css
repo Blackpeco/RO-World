@@ -2457,6 +2457,40 @@ body.walking #screen {
 .city-win.city-win-farm { width: min(520px, 92vw); max-height: 74vh; }
 .city-win.city-win-farm-mobs { width: min(560px, 94vw); max-height: 74vh; }
 .city-win.city-win-inv { width: min(480px, 92vw); max-height: 70vh; }
+.city-win.city-win-barber { width: min(420px, 90vw); max-height: 56vh; }
+.hair-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.7rem;
+  margin: 0.4rem 0 0.85rem;
+  justify-content: center;
+}
+.hair-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 3.4rem;
+  padding: 0.35rem 0.3rem;
+  border: 1px solid #3a2c18;
+  background: #1a140c;
+  color: #fff6d2;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+}
+.hair-swatch i {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--hair, #e8c84a);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.2), 0 1px 3px #000;
+}
+.hair-swatch.on {
+  border-color: #e8c84a;
+  box-shadow: 0 0 0 2px #e8c84a;
+}
 
 .farm-win-body { color: var(--ro-ink); }
 .farm-win-body h3 {

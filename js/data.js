@@ -73,6 +73,19 @@
   DATA.AUTO_FARM_STOP_HP = 0.15;
   DATA.START_POTIONS = { red: 5, orange: 2, white: 0, blue: 1 };
 
+  DATA.HAIR_COLORS = {
+    blonde: { id: "blonde", name: "บลอนด์", nameEn: "Blonde", swatch: "#e8c84a" },
+    black: { id: "black", name: "ดำ", nameEn: "Black", swatch: "#1c1c1c" },
+    brown: { id: "brown", name: "น้ำตาล", nameEn: "Brown", swatch: "#6b3a14" },
+    red: { id: "red", name: "แดง", nameEn: "Red", swatch: "#b22618" },
+    blue: { id: "blue", name: "ฟ้า", nameEn: "Blue", swatch: "#2f6ec4" },
+    silver: { id: "silver", name: "ขาว/เงิน", nameEn: "Silver", swatch: "#d5d7de" },
+  };
+  DATA.HAIR_COLOR_IDS = ["blonde", "black", "brown", "red", "blue", "silver"];
+  DATA.defaultHairColor = function (id) {
+    return DATA.HAIR_COLORS[id] ? id : "blonde";
+  };
+
   DATA.WEIGHT_BASE = 2000;
   DATA.WEIGHT_PER_STR = 30;
   DATA.itemWeight = function (idOrDef) {

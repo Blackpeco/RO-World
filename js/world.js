@@ -219,6 +219,9 @@
         const g = zoneGrid();
         FX.mapFloater(S.hostEl, ent.x, ent.y, g.cols, g.rows, text, kind);
       }
+      if ((kind === "dmg" || kind === "crit") && (ent.kind === "player" || ent === S.player)) {
+        setCombatPose(ent, "hit");
+      }
       if (kind === "dmg" || kind === "crit") {
         if (root.AUDIO && AUDIO.onHitFx) {
           if (atk.kind === "player") {
@@ -354,6 +357,10 @@
     const r = COMBAT.executeSkill(state, atk.unit, skillId);
     COMBAT.normalizeCdsToMs(atk.unit);
     if (root.FX && FX.mapActor) FX.mapActor(S.hostEl, atk, defn, skillId, def);
+    setCombatPose(atk, def && (def.type === "self" || def.kind !== "basic") ? "skill" : "atk");
+    if (skillId === "bash" || skillId === "magnum_break" || skillId === "provoke" || skillId === "endure") {
+      setCombatPose(atk, "skill");
+    }
     flushFx(state, atk, defn);
     if (state._restore) state._restore();
     if (!r || !r.ok) return false;
@@ -527,6 +534,7 @@
       COMBAT.doHitAttack(state, ent.unit, foe.unit, "โจมตี", 1, 0, { auto: true });
       COMBAT.normalizeCdsToMs(ent.unit);
       if (root.FX && FX.mapActor) FX.mapActor(S.hostEl, ent, foe, sid, skillDef(ent, sid));
+      setCombatPose(ent, "atk");
       flushFx(state, ent, foe);
       if (state._restore) state._restore();
       ent.atkReadyAt = nowMs() + COMBAT.attackIntervalMs(ent.unit);
@@ -698,6 +706,7 @@
     "provokedUntil", "provokeDefMul", "provokeAtkMul",
     "endureUntil", "endureHits", "endureMdef",
     "hidden", "hidingUntil",
+    "pose", "poseUntil", "combatUntil", "hairColor", "walkFrame",
   ];
 
   function copyLiveFightState(old, next) {
@@ -709,6 +718,31 @@
     });
   }
 
+  function setCombatPose(ent, pose) {
+    if (!ent || !ent.unit) return;
+    if (ent.unit.heroId !== "warrior") return;
+    const now = nowMs();
+    const hold = (root.FX && FX.POSE_MS && FX.POSE_MS[pose]) || 360;
+    const stance = (root.FX && FX.COMBAT_STANCE_MS) || 2800;
+    ent.unit.pose = pose;
+    ent.unit.poseUntil = now + hold;
+    ent.unit.combatUntil = now + stance;
+    if (ent.kind === "player" && S && S.save) {
+      S.save.hairColor = S.save.hairColor || ent.unit.hairColor;
+    }
+  }
+
+  function clearCombatPose(ent) {
+    ent = ent || (S && S.player);
+    if (!ent || !ent.unit) return;
+    ent.unit.pose = null;
+    ent.unit.poseUntil = 0;
+    ent.unit.combatUntil = 0;
+  }
+
+  WORLD.setCombatPose = setCombatPose;
+  WORLD.clearCombatPose = clearCombatPose;
+
   /* Sit regen = 2× stand (hpRegen/mpRegen per second while sitting). */
   WORLD.SIT_REGEN_MULT = 2;
 
@@ -716,6 +750,7 @@
     if (!S || !S.player) return;
     S.player.sitting = !!on;
     if (S.player.unit) S.player.unit.sitting = !!on;
+    if (on) clearCombatPose(S.player);
     if (on && MAP && MAP.stopWalking) MAP.stopWalking();
     if (S.hostEl) {
       const av = S.hostEl.querySelector(".map-avatar");
@@ -723,7 +758,10 @@
       const img = av && (av.querySelector("img.map-sprite") || av.querySelector("img"));
       if (img && root.FX && FX.spriteSrc) {
         const hid = (S.player.unit && S.player.unit.heroId) || (S.save && S.save.heroId) || "warrior";
-        img.src = FX.spriteSrc(hid, S.player.unit || S.player);
+        const unit = S.player.unit || S.player;
+        const src = FX.spriteSrc(hid, unit);
+        if (FX.applyHeroImg) FX.applyHeroImg(img, src, unit);
+        else img.src = src;
       }
     }
   }
@@ -1192,7 +1230,8 @@
           art.appendChild(img);
         }
         img.className = "map-sprite" + tint + size;
-        if (img.getAttribute("src") !== src) img.src = src;
+        if (u && !u.isMonster && root.FX && FX.applyHeroImg) FX.applyHeroImg(img, src, u);
+        else if (img.getAttribute("src") !== src) img.src = src;
         if (root.FX && FX.applyFacing) {
           FX.applyFacing(el, e.facing || (u && u.facing) || "s", { isMonster: !!(u && u.isMonster) });
         }
@@ -1257,8 +1296,10 @@
       const img = av.querySelector("img");
       if (img) {
         img.className = "map-sprite hero";
-        img.src = (root.FX && FX.spriteSrc && FX.spriteSrc(e.unit.heroId, e.unit)) ||
+        const src = (root.FX && FX.spriteSrc && FX.spriteSrc(e.unit.heroId, e.unit)) ||
           ("assets/chars/" + (e.unit.heroId || "warrior") + "_s.png");
+        if (root.FX && FX.applyHeroImg) FX.applyHeroImg(img, src, e.unit);
+        else img.src = src;
         if (root.FX && FX.applyFacing) FX.applyFacing(av, e.facing || (e.unit && e.unit.facing) || "s");
       }
       const sm = av.querySelector("small");

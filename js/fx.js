@@ -158,6 +158,47 @@
   };
 
   FX.mob404s = [];
+  FX.SPRITE_VER = "ui3-swordsman-1";
+  FX.POSE_MS = { hit: 360, skill: 420, atk: 280 };
+  FX.COMBAT_STANCE_MS = 2800;
+  FX.WALK_FRAME_MS = 240;
+  FX.HAIR_TINT = {
+    black: { r: 28, g: 24, b: 22 },
+    brown: { r: 92, g: 52, b: 22 },
+    red: { r: 176, g: 42, b: 28 },
+    blue: { r: 48, g: 96, b: 186 },
+    silver: { r: 210, g: 214, b: 222 },
+  };
+  FX._hairCache = {};
+  FX._hairPending = {};
+
+  FX.hairColorOf = function (unit) {
+    const raw =
+      (unit && unit.hairColor) ||
+      (unit && unit.save && unit.save.hairColor) ||
+      (root.App && App.save && App.save.hairColor) ||
+      "blonde";
+    if (root.DATA && DATA.HAIR_COLORS && DATA.HAIR_COLORS[raw]) return raw;
+    if (FX.HAIR_TINT[raw] || raw === "blonde") return raw;
+    return "blonde";
+  };
+
+  FX.spriteUrl = function (path) {
+    if (!path || path.indexOf("data:") === 0 || path.indexOf("?") >= 0) return path;
+    return path + "?v=" + FX.SPRITE_VER;
+  };
+
+  FX.effectivePose = function (unit) {
+    if (!unit || unit.sitting) return null;
+    const hid = unit.heroId || "";
+    if (hid && hid !== "warrior") return null;
+    const now = Date.now();
+    const pose = unit.pose;
+    const until = unit.poseUntil || 0;
+    if (pose && pose !== "ready" && now < until) return pose;
+    if ((unit.combatUntil && now < unit.combatUntil) || pose === "ready") return "ready";
+    return null;
+  };
 
   FX.mobStillSrc = function (id, unit) {
     if (unit && unit.sprite) return unit.sprite;
@@ -190,12 +231,129 @@
     if (unit && unit.sitting) {
       return "assets/chars/" + hid + "_sit_" + art.base + ".png";
     }
-    let dirPath = "assets/chars/" + hid + "_" + art.base + ".png";
+    const now = Date.now();
     const wf = unit && (unit.walkFrame || unit.step);
-    if (wf && (art.base === "s" || art.base === "se")) {
-      dirPath = "assets/chars/" + hid + "_s_w" + wf + ".png";
+    const stepping =
+      !!(unit && unit.walking) ||
+      !!(wf && !(unit && unit.lastStepAt)) ||
+      !!(unit && unit.lastStepAt && now - unit.lastStepAt < FX.WALK_FRAME_MS);
+    if (wf && stepping) {
+      if (hid === "warrior") {
+        return "assets/chars/" + hid + "_" + art.base + "_w" + wf + ".png";
+      }
+      if (art.base === "s" || art.base === "se") {
+        return "assets/chars/" + hid + "_s_w" + wf + ".png";
+      }
     }
-    return dirPath;
+    const pose = FX.effectivePose(unit);
+    if (pose === "hit" || pose === "skill") {
+      return "assets/chars/" + hid + "_" + pose + "_s.png";
+    }
+    if (pose === "atk") {
+      return "assets/chars/" + hid + "_atk_s.png";
+    }
+    if (pose === "ready") {
+      return "assets/chars/" + hid + "_ready_" + art.base + ".png";
+    }
+    return "assets/chars/" + hid + "_" + art.base + ".png";
+  };
+
+  function rgbHue(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    if (d < 1e-6) return 0;
+    let h = 0;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+    return h;
+  }
+
+  function isBlondeHair(r, g, b, a) {
+    if (a < 180) return false;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max < 150) return false;
+    const sat = (max - min) / (max || 1);
+    if (sat < 0.18) return false;
+    if (b > r * 0.72) return false;
+    const h = rgbHue(r, g, b);
+    return h >= 28 && h <= 65 && r >= 150 && g >= 110;
+  }
+
+  FX.recolorHair = function (img, color) {
+    if (!color || color === "blonde" || !FX.HAIR_TINT[color]) return null;
+    if (typeof document === "undefined") return null;
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth || img.width;
+    c.height = img.naturalHeight || img.height;
+    if (!c.width || !c.height) return null;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+    const pix = ctx.getImageData(0, 0, c.width, c.height);
+    const d = pix.data;
+    const t = FX.HAIR_TINT[color];
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+      const a = d[i + 3];
+      if (!isBlondeHair(r, g, b, a)) continue;
+      const lum = (0.35 * r + 0.5 * g + 0.15 * b) / 255;
+      const k = 0.38 + lum * 0.85;
+      d[i] = Math.max(0, Math.min(255, t.r * k + (lum - 0.5) * 36));
+      d[i + 1] = Math.max(0, Math.min(255, t.g * k + (lum - 0.5) * 36));
+      d[i + 2] = Math.max(0, Math.min(255, t.b * k + (lum - 0.5) * 36));
+    }
+    ctx.putImageData(pix, 0, 0);
+    return c.toDataURL("image/png");
+  };
+
+  FX.applyHeroImg = function (img, path, unit) {
+    if (!img || !path) return;
+    const color = FX.hairColorOf(unit);
+    const hid = (unit && unit.heroId) || "";
+    const url = FX.spriteUrl(path);
+    if (hid !== "warrior" || color === "blonde" || typeof Image === "undefined") {
+      if (img.getAttribute("src") !== url) img.src = url;
+      return;
+    }
+    const cacheKey = path + "|" + color;
+    if (FX._hairCache[cacheKey]) {
+      if (img.getAttribute("src") !== FX._hairCache[cacheKey]) img.src = FX._hairCache[cacheKey];
+      return;
+    }
+    if (img.getAttribute("src") !== url) img.src = url;
+    if (FX._hairPending[cacheKey]) {
+      FX._hairPending[cacheKey].push(img);
+      return;
+    }
+    FX._hairPending[cacheKey] = [img];
+    const loader = new Image();
+    loader.onload = function () {
+      let data = null;
+      try {
+        data = FX.recolorHair(loader, color);
+      } catch (err) {
+        data = null;
+      }
+      FX._hairCache[cacheKey] = data || url;
+      (FX._hairPending[cacheKey] || []).forEach(function (el) {
+        if (el && FX._hairCache[cacheKey]) el.src = FX._hairCache[cacheKey];
+      });
+      delete FX._hairPending[cacheKey];
+    };
+    loader.onerror = function () {
+      delete FX._hairPending[cacheKey];
+    };
+    loader.src = url;
   };
 
   FX.markWalk = function (el) {
@@ -407,7 +565,7 @@
   };
 
   FX.portraitSrc = function (heroId) {
-    return "assets/chars/" + heroId + ".png";
+    return FX.spriteUrl("assets/chars/" + heroId + ".png");
   };
 
   FX.skillIcon = function (skillId, def) {
