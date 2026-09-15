@@ -1916,6 +1916,8 @@ console.log("prontera art lock: flowers, houses, 3x3 warps, npcs");
 
   assert(MAP.npcAt(24, 40) && MAP.npcAt(24, 40).id === "gear", "W npcAt gear");
   assert(MAP.npcAt(56, 40) && MAP.npcAt(56, 40).id === "potion", "P npcAt potion");
+  const mAt = cg.npcs && cg.npcs.M;
+  assert(mAt && MAP.npcAt(mAt.x, mAt.y) && MAP.npcAt(mAt.x, mAt.y).id === "barber", "M npcAt barber");
   let sAt = null;
   Object.keys(cg.cells).forEach(function (k) {
     if (cg.cells[k] === "S") {
@@ -2530,6 +2532,61 @@ console.log("sit pose sprites");
   const sitKf = css.match(/@keyframes sitRest\s*\{[\s\S]*?\n\}/);
   assert(!!sitKf, "css has sitRest keyframes");
   assert(sitKf && sitKf[0].indexOf("scaleY") < 0, "sitRest keyframes have no scaleY");
+}
+
+console.log("swordsman sprites, ready stance, barber hair");
+{
+  const FX = ctx.FX;
+  const WORLD = ctx.WORLD;
+  const nWalk = FX.spriteSrc("warrior", { heroId: "warrior", facing: "n", walkFrame: 1 });
+  assert(nWalk === "assets/chars/warrior_n_w1.png", "warrior north walk uses n_w1, got " + nWalk);
+  const eWalk = FX.spriteSrc("warrior", { heroId: "warrior", facing: "e", walkFrame: 2 });
+  assert(eWalk === "assets/chars/warrior_e_w2.png", "warrior east walk uses e_w2, got " + eWalk);
+  const idleN = FX.spriteSrc("warrior", { heroId: "warrior", facing: "n" });
+  assert(idleN === "assets/chars/warrior_n.png", "warrior idle north unarmed, got " + idleN);
+  const ready = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s", pose: "ready" });
+  assert(ready === "assets/chars/warrior_ready_s.png", "ready pose s, got " + ready);
+  const readyE = FX.spriteSrc("warrior", { heroId: "warrior", facing: "e", pose: "ready" });
+  assert(readyE === "assets/chars/warrior_ready_e.png", "ready pose e, got " + readyE);
+  const hit = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s", pose: "hit", poseUntil: Date.now() + 400 });
+  assert(hit === "assets/chars/warrior_hit_s.png", "hit pose, got " + hit);
+  const skill = FX.spriteSrc("warrior", { heroId: "warrior", facing: "s", pose: "skill", poseUntil: Date.now() + 400 });
+  assert(skill === "assets/chars/warrior_skill_s.png", "skill pose, got " + skill);
+  const afterHit = FX.spriteSrc("warrior", {
+    heroId: "warrior",
+    facing: "s",
+    pose: "hit",
+    poseUntil: Date.now() - 10,
+    combatUntil: Date.now() + 2000,
+  });
+  assert(afterHit === "assets/chars/warrior_ready_s.png", "expired hit while in combat → ready, got " + afterHit);
+  const files = [
+    "warrior_s.png", "warrior_e.png", "warrior_n.png", "warrior_se.png",
+    "warrior_s_w1.png", "warrior_s_w2.png", "warrior_e_w1.png", "warrior_n_w1.png",
+    "warrior_sit_s.png", "warrior_sit_e.png", "warrior_sit_n.png",
+    "warrior_hit_s.png", "warrior_skill_s.png",
+    "warrior_ready_s.png", "warrior_ready_e.png", "warrior_ready_n.png",
+    "warrior_ready_w.png",
+    "warrior_atk_s.png", "warrior_atk_1.png", "warrior_atk_2.png",
+    "warrior_atk_3.png", "warrior_atk_4.png", "warrior_atk_5.png",
+    "warrior_doll.png", "warrior_w.png", "warrior_sw.png",
+    "warrior_sit_w.png", "warrior_hit_e.png",
+  ];
+  files.forEach(function (name) {
+    assert(existsSync(join(root, "assets/chars/" + name)), "exists assets/chars/" + name);
+  });
+  const save = PVE.createSave("warrior", {}, "Tester");
+  assert(save.hairColor === "blonde", "new save default hair blonde, got " + save.hairColor);
+  save.hairColor = "blue";
+  PVE.ensureProgress(save);
+  assert(save.hairColor === "blue", "ensureProgress keeps hairColor");
+  const unit = PVE.buildHeroUnit(save);
+  assert(unit.hairColor === "blue", "buildHeroUnit copies hairColor");
+  assert(DATA.HAIR_COLOR_IDS.length >= 6, "at least 6 hair colors");
+  assert(DATA.defaultHairColor("nope") === "blonde", "invalid hair falls back to blonde");
+  assert(FX.hairColorOf({ hairColor: "red" }) === "red", "hairColorOf red");
+  assert(FX.SPRITE_VER === "ui3-swordsman-3", "sprite cache bump ui3-swordsman-3");
+  assert(typeof WORLD.setCombatPose === "function" && typeof WORLD.clearCombatPose === "function", "WORLD pose helpers");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

@@ -140,6 +140,7 @@
       fightKind: null,
       charName: typeof charName === "string" ? charName : "",
       username: "",
+      hairColor: "blonde",
     };
     if (PVE.isBowHero(heroId)) {
       save.ammo = { id: "arrow", count: 100 };
@@ -176,6 +177,7 @@
       save.charName = (hero && hero.name) || "";
     }
     if (save.username == null) save.username = "";
+    save.hairColor = DATA.defaultHairColor ? DATA.defaultHairColor(save.hairColor) : (save.hairColor || "blonde");
     if (save.equip) {
       DATA.SLOTS.forEach(function (slot) {
         const id = save.equip[slot.id];
@@ -670,6 +672,7 @@
     unit.ammo = save.ammo || unit.ammo;
     if (save.arrowAtk != null) unit.arrowAtk = save.arrowAtk;
     if (save.arrowCount != null) unit.arrowCount = save.arrowCount;
+    unit.hairColor = DATA.defaultHairColor ? DATA.defaultHairColor(save.hairColor) : (save.hairColor || "blonde");
     unit.noRegen = !!(d.weight && d.weight.noRegen);
     if (d.potionAspdMod > 0) unit.potionAspdMod = d.potionAspdMod;
     if (PVE.potionBuffRemainMs(save, "berserk") > 0) unit.berserk = true;

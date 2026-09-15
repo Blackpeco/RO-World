@@ -617,7 +617,32 @@
     if (id === "gear") App.goShop();
     else if (id === "potion") App.goPotionShop();
     else if (id === "kafra") App.goKafra();
+    else if (id === "barber") App.goBarber();
     else if (id === "castle") App.goBossSelect();
+  };
+
+  App.goBarber = function () {
+    if (!App.save) return;
+    PVE.ensureProgress(App.save);
+    UI.openCityWin("barber", App.save);
+  };
+
+  App.setHairColor = function (id) {
+    if (!App.save) return;
+    const next = DATA.defaultHairColor ? DATA.defaultHairColor(id) : id || "blonde";
+    App.save.hairColor = next;
+    if (typeof WORLD !== "undefined" && WORLD.playerUnit && WORLD.playerUnit()) {
+      WORLD.playerUnit().hairColor = next;
+    }
+    if (typeof FX !== "undefined") {
+      FX._hairCache = {};
+      FX._hairPending = {};
+    }
+    if (App.save.username && PVE.writeAccount) PVE.writeAccount(App.save.username, App.save);
+    if (typeof MAP !== "undefined" && MAP.renderVisible) MAP.renderVisible();
+    if (UI.refreshHud) UI.refreshHud(App.save);
+    if (App.cityWinOpen() && UI._cityWinKind === "barber") UI.openCityWin("barber", App.save);
+    if (UI.toast) UI.toast("เปลี่ยนสีผมแล้ว");
   };
 
   App.goKafra = function () {
@@ -1760,6 +1785,11 @@
         setTimeout(function () {
           if (typeof MAP !== "undefined" && MAP.setSitting) MAP.setSitting(true);
         }, 500);
+        return;
+      }
+      if (shot === "barber") {
+        App.save.cityPos = { x: 31, y: 40 };
+        App.goCity();
         return;
       }
       if (shot === "plaza") App.save.cityPos = { x: 40, y: 44 };

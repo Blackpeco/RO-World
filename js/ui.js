@@ -1262,6 +1262,13 @@
     wrap.innerHTML = UI.adventureHud(save, typeof App !== "undefined" && App.screen === "boss-select" ? { zone: "boss-select" } : {});
     const next = wrap.firstChild;
     if (next) el.replaceWith(next);
+    const face = document.querySelector(".hud-face");
+    if (face && save && typeof FX !== "undefined" && FX.applyHeroImg) {
+      FX.applyHeroImg(face, "assets/chars/" + (save.heroId || "warrior") + ".png", {
+        heroId: save.heroId,
+        hairColor: save.hairColor,
+      });
+    }
   };
 
   UI.rtStrip = function (save) {
@@ -1556,6 +1563,31 @@
     if (opts.overlay) return inner;
     UI.setWalkMode(false);
     UI.el().innerHTML = '<section class="panel shop-panel ro-win">' + inner + "</section>";
+  };
+
+  UI.barber = function (save) {
+    PVE.ensureProgress(save);
+    const cur = DATA.defaultHairColor ? DATA.defaultHairColor(save.hairColor) : (save.hairColor || "blonde");
+    const ids = DATA.HAIR_COLOR_IDS || ["blonde", "black", "brown", "red", "blue", "silver"];
+    const btns = ids.map(function (id) {
+      const def = (DATA.HAIR_COLORS && DATA.HAIR_COLORS[id]) || { name: id, swatch: "#ccc" };
+      return (
+        '<button type="button" class="hair-swatch' + (cur === id ? " on" : "") + '" onclick="App.setHairColor(\'' +
+        id +
+        '\')" title="' +
+        UI.esc(def.nameEn || id) +
+        '" style="--hair:' +
+        def.swatch +
+        '"><i></i><span>' +
+        UI.esc(def.name) +
+        "</span></button>"
+      );
+    }).join("");
+    return (
+      '<p class="lead">เลือกสีผม — บลอนด์เป็นค่าเริ่มต้นตามศิลปะ</p>' +
+      '<div class="hair-row">' + btns + "</div>" +
+      '<div class="btn-row"><button type="button" class="btn ghost" onclick="App.closeCityWin()">ปิด</button></div>'
+    );
   };
 
   UI.kafra = function (save) {
@@ -1984,6 +2016,7 @@
       farm: "AUTO FARM",
       inv: "INVENTORY / กระเป๋า",
       "farm-mobs": "เลือกมอนเตอร์",
+      barber: "ช่างตัดผม / Barber",
     };
     if (!titles[kind]) return;
     UI._cityWinKind = kind;
@@ -2018,6 +2051,8 @@
       inner = UI.invWin(save);
     } else if (kind === "farm-mobs") {
       inner = UI.farmMobsWin(save);
+    } else if (kind === "barber") {
+      inner = UI.barber(save);
     }
     overlay.innerHTML =
       '<div class="ro-win city-win city-win-' + kind + '">' +
