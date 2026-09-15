@@ -1787,6 +1787,11 @@
         }, 500);
         return;
       }
+      if (shot === "barber") {
+        App.save.cityPos = { x: 31, y: 40 };
+        App.goCity();
+        return;
+      }
       if (shot === "plaza") App.save.cityPos = { x: 40, y: 44 };
       else if (shot === "park") App.save.cityPos = { x: 12, y: 68 };
       App.goCity();
